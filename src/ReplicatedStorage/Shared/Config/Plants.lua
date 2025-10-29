@@ -152,7 +152,7 @@ local Plants = {
             
             harvestXP = 75,
             canReharvest = true,
-            reharvest Time = 300,
+            reharvestTime = 300,
         },
         
         -- EPIC PLANTS
@@ -207,7 +207,7 @@ local Plants = {
             
             harvestXP = 500,
             canReharvest = true,
-            reharvest Time = 1800, -- 30 minutes
+            reharvestTime = 1800, -- 30 minutes
             glowEffect = true,
             auraEffect = true,
             mutationChance = 0.25,
