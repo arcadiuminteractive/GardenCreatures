@@ -195,7 +195,7 @@ function DataManager.InitializePlayer(player: Player)
         profile:AddUserId(player.UserId) -- GDPR compliance
         profile:Reconcile() -- Fill in missing data with defaults
         
-        profile:ListenToRelease(function()
+        profile.OnSessionEnd:Connect(function()
             Profiles[player] = nil
             player:Kick("Profile released - please rejoin")
         end)
