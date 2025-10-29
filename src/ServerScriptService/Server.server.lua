@@ -1,6 +1,11 @@
 --[[
-    Server.server.lua
+    Server.server.lua - FIXED VERSION
     Main server entry point for Garden Creatures
+    
+    ✅ FIXES APPLIED:
+    1. Creates RemoteEvents folder BEFORE any systems load
+    2. Pre-creates commonly used RemoteEvents to prevent race conditions
+    3. Ensures clients can access RemoteEvents immediately
     
     Place this file in: ServerScriptService/Server.server.lua
     
@@ -29,7 +34,83 @@ local Config = {
     WildSpawns = require(Shared.Config.WildSpawns),
 }
 
--- Load DataManager first (critical!)
+-- ============================
+-- ✅ FIX: CREATE REMOTE EVENTS FOLDER IMMEDIATELY
+-- This prevents client race conditions where they try to access
+-- RemoteEvents before the server creates it
+-- ============================
+
+local RemoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
+if not RemoteEvents then
+    RemoteEvents = Instance.new("Folder")
+    RemoteEvents.Name = "RemoteEvents"
+    RemoteEvents.Parent = ReplicatedStorage
+    print("📡 Created RemoteEvents folder")
+end
+
+-- Helper function to create RemoteEvents
+local function CreateRemoteEvent(name: string): RemoteEvent
+    local existing = RemoteEvents:FindFirstChild(name)
+    if existing and existing:IsA("RemoteEvent") then
+        return existing
+    end
+    
+    local remoteEvent = Instance.new("RemoteEvent")
+    remoteEvent.Name = name
+    remoteEvent.Parent = RemoteEvents
+    return remoteEvent
+end
+
+-- Helper function to create RemoteFunctions
+local function CreateRemoteFunction(name: string): RemoteFunction
+    local existing = RemoteEvents:FindFirstChild(name)
+    if existing and existing:IsA("RemoteFunction") then
+        return existing
+    end
+    
+    local remoteFunction = Instance.new("RemoteFunction")
+    remoteFunction.Name = name
+    remoteFunction.Parent = RemoteEvents
+    return remoteFunction
+end
+
+-- ✅ Pre-create commonly used RemoteEvents to prevent infinite yield warnings
+print("📡 Creating RemoteEvents...")
+
+-- Seed Collection System
+CreateRemoteEvent("CollectSeed")
+
+-- Plant System
+CreateRemoteEvent("PlantSeed")
+CreateRemoteEvent("HarvestPlant")
+CreateRemoteEvent("WaterPlant")
+
+-- Creature System
+CreateRemoteEvent("CraftCreature")
+CreateRemoteEvent("TameCreature")
+CreateRemoteEvent("SetActiveCreatures")
+CreateRemoteEvent("UseAbility")
+
+-- Economy System
+CreateRemoteEvent("PurchaseItem")
+CreateRemoteEvent("SellItem")
+
+-- Trading System
+CreateRemoteEvent("SendTradeRequest")
+CreateRemoteEvent("AcceptTrade")
+CreateRemoteEvent("DeclineTrade")
+
+-- UI Updates (Server -> Client)
+CreateRemoteEvent("UpdateInventoryUI")
+CreateRemoteEvent("UpdateCurrencyUI")
+CreateRemoteEvent("ShowNotification")
+
+print("✅ RemoteEvents initialized with", #RemoteEvents:GetChildren(), "events")
+
+-- ============================
+-- LOAD DATAMANAGER (CRITICAL!)
+-- ============================
+
 local DataManager = require(Data.DataManager)
 print("✅ DataManager loaded")
 
@@ -41,6 +122,7 @@ local LoadedSystems = {
 -- Systems to load (in order)
 local SystemsToLoad = {
     { folder = "SeedSpawnSystem", module = "SeedSpawnController" },
+    -- Uncomment these as you implement them:
     -- { folder = "EconomySystem", module = "CurrencyManager" },
     -- { folder = "InventorySystem", module = "InventoryManager" },
     -- { folder = "GardeningSystem", module = "PlantManager" },
@@ -109,6 +191,14 @@ Players.PlayerAdded:Connect(function(player)
         print("🌱 Welcome to Garden Creatures,", player.Name .. "!")
         
         -- TODO: Fire RemoteEvent to show welcome UI
+        -- local ShowNotification = RemoteEvents:FindFirstChild("ShowNotification")
+        -- if ShowNotification then
+        --     ShowNotification:FireClient(player, {
+        --         title = "Welcome!",
+        --         message = "Start collecting seeds to grow your garden!",
+        --         duration = 5
+        --     })
+        -- end
     else
         warn("❌ Failed to initialize player data for:", player.Name)
     end
@@ -173,6 +263,7 @@ _G.GardenCreatures = {
     Systems = LoadedSystems,
     Config = Config,
     Version = "0.1.0",
+    RemoteEvents = RemoteEvents,
 }
 
 -- Debug commands
@@ -186,6 +277,10 @@ end
 
 _G.GC_GetData = function(player)
     return DataManager.GetData(player)
+end
+
+_G.GC_AddSeed = function(player, seedId, amount)
+    return DataManager.AddItem(player, "seeds", seedId, amount or 1)
 end
 
 -- ============================
