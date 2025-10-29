@@ -40,7 +40,7 @@ local LoadedSystems = {
 
 -- Systems to load (in order)
 local SystemsToLoad = {
-    -- Add these as you create them
+    { folder = "SeedSpawnSystem", module = "SeedSpawnController" },
     -- { folder = "EconomySystem", module = "CurrencyManager" },
     -- { folder = "InventorySystem", module = "InventoryManager" },
     -- { folder = "GardeningSystem", module = "PlantManager" },

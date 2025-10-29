@@ -29,13 +29,8 @@ local UI = script.Parent.UI
 
 -- Controllers to load
 local ControllersToLoad = {
+    "SeedCollectionController",
     "InventoryController",
-    "GardeningController",
-    "CraftingController",
-    "CreatureController",
-    "TradingController",
-    "ShopController",
-    "HomeBaseController",
 }
 
 local LoadedControllers = {}

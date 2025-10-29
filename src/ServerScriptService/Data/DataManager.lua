@@ -1,6 +1,6 @@
 --[[
     DataManager.lua
-    Manages all player data persistence using ProfileService
+    Manages all player data persistence using ProfileStore
     
     Responsibilities:
     - Load/save player data
@@ -18,9 +18,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
--- ProfileService (Install from: https://github.com/MadStudioRoblox/ProfileService)
--- Place ProfileService module in ServerScriptService or ReplicatedStorage
-local ProfileService = require(ServerScriptService:WaitForChild("ProfileService"))
+-- ProfileStore (Install from: https://github.com/MadStudioRoblox/ProfileStore)
+-- Place ProfileStore module in ServerScriptService or ReplicatedStorage
+local ProfileStore = require(ServerScriptService:WaitForChild("ProfileStore"))
 
 -- Configuration
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -36,7 +36,7 @@ local PROFILE_STORE_NAME = "PlayerData_v1" -- Change version number to reset all
 local AUTO_SAVE_INTERVAL = 300 -- Save every 5 minutes
 
 -- Profile store
-local ProfileStore = ProfileService.GetProfileStore(
+local ProfileStore = ProfileStore.GetProfileStore(
     PROFILE_STORE_NAME,
     DataManager.GetDefaultData()
 )
@@ -735,7 +735,7 @@ game:BindToClose(function()
         end
     end
     
-    -- Wait for ProfileService to finish saving
+    -- Wait for ProfileStore to finish saving
     task.wait(3)
 end)
 
