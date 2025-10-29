@@ -1,0 +1,24 @@
+# Roblox Studio
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+# Rojo
+*.lock
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Node modules (if using any JS tools)
+node_modules/
+
+# Build outputs
+build/
+dist/
