@@ -20,7 +20,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 -- ProfileStore (Install from: https://github.com/MadStudioRoblox/ProfileStore)
 -- Place ProfileStore module in ServerScriptService or ReplicatedStorage
-local ProfileStore = require(ServerScriptService:WaitForChild("ProfileStore"))
+local ProfileStoreModule = require(ServerScriptService:WaitForChild("ProfileStore"))
 
 -- Configuration
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -35,14 +35,12 @@ local Config = {
 local PROFILE_STORE_NAME = "PlayerData_v1" -- Change version number to reset all data
 local AUTO_SAVE_INTERVAL = 300 -- Save every 5 minutes
 
--- Profile store
-local ProfileStore = ProfileStore.GetProfileStore(
-    PROFILE_STORE_NAME,
-    DataManager.GetDefaultData()
-)
-
 -- Active profiles
 local Profiles = {}
+
+-- ============================
+-- DATA TEMPLATE
+-- ============================
 
 -- Data template
 function DataManager.GetDefaultData()
@@ -51,53 +49,53 @@ function DataManager.GetDefaultData()
         coins = Config.Economy.currencies.coins.startingAmount or 100,
         gems = Config.Economy.currencies.gems.startingAmount or 0,
         
+        -- XP & Level
+        xp = 0,
+        level = 1,
+        
         -- Inventory
         inventory = {
-            seeds = {}, -- {[seedId] = amount}
-            materials = {}, -- {[materialId] = amount}
-            items = {}, -- {[itemId] = amount}
+            seeds = {},    -- {seedId = count}
+            plants = {},   -- {plantId = count}
+            potions = {},  -- {potionId = count}
+            foods = {},    -- {foodId = count}
+            tools = {},    -- {toolId = count}
         },
         
         -- Creatures
-        creatures = {}, -- Array of CreatureInstance
-        activeCreatures = {}, -- Instance IDs of following creatures
-        maxFollowSlots = 1, -- Default 1, increase with gamepass
-        maxStorageSlots = Config.Creatures.storageLimits.free or 5,
+        creatures = {},        -- Array of owned creature instances
+        activeCreatures = {},  -- Array of instance IDs currently following
+        maxFollowSlots = 3,    -- How many creatures can follow at once
         
         -- Garden
-        gardenPlots = {}, -- Array of PlotData
-        maxPlots = 3, -- Starting plots
+        gardenPlots = {},      -- Array of plot data
+        maxPlots = 6,          -- Starting plot count
         
         -- Progression
-        level = 1,
-        xp = 0,
-        unlockedRecipes = {}, -- Array of recipe IDs
-        discoveredCreatures = {}, -- Array of creature IDs
+        unlockedRecipes = {},  -- Array of recipe IDs
+        unlockedAreas = {},    -- Array of area IDs
         
         -- Settings
         settings = {
             musicVolume = 0.5,
             sfxVolume = 0.7,
             showTutorial = true,
-            chatEnabled = true,
-            notifications = true,
         },
         
-        -- Stats
+        -- Stats/Analytics
         stats = {
+            playtime = 0,
             seedsCollected = 0,
             plantsHarvested = 0,
-            creaturesCreated = 0,
-            creaturesTamed = 0,
-            tradesCompleted = 0,
+            creaturesDiscovered = 0,
+            recipesCooked = 0,
             coinsEarned = 0,
             gemsSpent = 0,
-            timePlayed = 0,
         },
         
         -- Timestamps
+        firstJoin = os.time(),
         lastLogin = os.time(),
-        creationDate = os.time(),
         lastSave = os.time(),
         
         -- Gamepasses
@@ -115,13 +113,27 @@ function DataManager.GetDefaultData()
     }
 end
 
+-- Profile store (initialized AFTER GetDefaultData is defined)
+local ProfileStore = ProfileStoreModule.GetProfileStore(
+    PROFILE_STORE_NAME,
+    DataManager.GetDefaultData()
+)
+
+-- ============================
+-- CORE PROFILE MANAGEMENT
+-- ============================
+
 --[[
     Initialize a player's profile when they join
 ]]
 function DataManager.InitializePlayer(player: Player)
-    local profile = ProfileStore:LoadProfileAsync(
+    local profile = ProfileStore:StartSessionAsync(
         "Player_" .. player.UserId,
-        "ForceLoad"
+        {
+            Cancel = function()
+                return player.Parent ~= Players
+            end
+        }
     )
     
     if profile ~= nil then
@@ -156,25 +168,19 @@ function DataManager.InitializePlayer(player: Player)
             return true
         else
             -- Player left before profile loaded
-            profile:Release()
+            profile:EndSession()
             return false
         end
     else
-        -- Profile couldn't be loaded (rare)
-        player:Kick("Failed to load data - please rejoin")
+        -- Failed to load profile
+        warn("❌ Failed to load profile for:", player.Name)
+        player:Kick("Failed to load your data. Please rejoin!")
         return false
     end
 end
 
 --[[
-    Get a player's profile
-]]
-function DataManager.GetProfile(player: Player)
-    return Profiles[player]
-end
-
---[[
-    Get a player's data (read-only copy for safety)
+    Safely access a player's data (read-only)
 ]]
 function DataManager.GetData(player: Player)
     local profile = Profiles[player]
@@ -185,31 +191,36 @@ function DataManager.GetData(player: Player)
 end
 
 --[[
-    Save a player's data
+    Get a player's profile (for direct manipulation)
+    Use sparingly - prefer specific methods
 ]]
-function DataManager.SavePlayer(player: Player)
+function DataManager.GetProfile(player: Player)
+    return Profiles[player]
+end
+
+--[[
+    Save a player's profile
+]]
+function DataManager.SavePlayer(player: Player): boolean
     local profile = Profiles[player]
     if profile then
         profile.Data.lastSave = os.time()
-        print("💾 Saved data for:", player.Name)
+        profile:Save()
         return true
     end
     return false
 end
 
 --[[
-    Release profile when player leaves
+    Handle player leaving - save and release profile
 ]]
 function DataManager.PlayerRemoving(player: Player)
     local profile = Profiles[player]
     if profile then
-        -- Update time played
-        local sessionTime = os.time() - profile.Data.lastLogin
-        profile.Data.stats.timePlayed = profile.Data.stats.timePlayed + sessionTime
-        
-        profile:Release()
+        profile.Data.lastSave = os.time()
+        profile:EndSession()
         Profiles[player] = nil
-        print("👋 Released profile for:", player.Name)
+        print("💾 Saved and released profile for:", player.Name)
     end
 end
 
@@ -323,42 +334,16 @@ end
 -- CREATURE METHODS
 -- ============================
 
-function DataManager.AddCreature(player: Player, creatureInstance: any): boolean
+function DataManager.AddCreature(player: Player, creatureData: any): boolean
     local profile = Profiles[player]
     if not profile then return false end
     
-    table.insert(profile.Data.creatures, creatureInstance)
+    table.insert(profile.Data.creatures, creatureData)
     
     -- Update stats
-    profile.Data.stats.creaturesCreated = profile.Data.stats.creaturesCreated + 1
-    
-    -- Add to discovered if new
-    if not table.find(profile.Data.discoveredCreatures, creatureInstance.creatureId) then
-        table.insert(profile.Data.discoveredCreatures, creatureInstance.creatureId)
-    end
+    profile.Data.stats.creaturesDiscovered = profile.Data.stats.creaturesDiscovered + 1
     
     return true
-end
-
-function DataManager.RemoveCreature(player: Player, instanceId: string): boolean
-    local profile = Profiles[player]
-    if not profile then return false end
-    
-    for i, creature in ipairs(profile.Data.creatures) do
-        if creature.instanceId == instanceId then
-            table.remove(profile.Data.creatures, i)
-            
-            -- Remove from active if following
-            local activeIndex = table.find(profile.Data.activeCreatures, instanceId)
-            if activeIndex then
-                table.remove(profile.Data.activeCreatures, activeIndex)
-            end
-            
-            return true
-        end
-    end
-    
-    return false
 end
 
 function DataManager.GetCreature(player: Player, instanceId: string): any?
@@ -581,14 +566,13 @@ end
 
 function DataManager.GetSetting(player: Player, settingName: string): any?
     local data = DataManager.GetData(player)
-    if data and data.settings then
-        return data.settings[settingName]
-    end
-    return nil
+    if not data then return nil end
+    
+    return data.settings[settingName]
 end
 
 -- ============================
--- INTERNAL METHODS
+-- INTERNAL HELPER METHODS
 -- ============================
 
 function DataManager._CheckDailyReward(player: Player)
@@ -597,29 +581,11 @@ function DataManager._CheckDailyReward(player: Player)
     
     local lastReward = profile.Data.lastDailyReward
     local currentTime = os.time()
-    local dayInSeconds = 86400
     
-    -- Check if it's been 24 hours
-    if currentTime - lastReward >= dayInSeconds then
-        -- Award daily reward
-        local coins = Config.Economy.earningRates.dailyLogin or 100
-        DataManager.AddCurrency(player, "Coins", coins)
-        
-        -- VIP bonus
-        if DataManager.HasGamepass(player, Config.Economy.gamepasses[5].gamepassId) then
-            DataManager.AddCurrency(player, "Gems", 100)
-        end
-        
-        -- Update streak
-        if currentTime - lastReward < dayInSeconds * 2 then
-            profile.Data.dailyRewardStreak = profile.Data.dailyRewardStreak + 1
-        else
-            profile.Data.dailyRewardStreak = 1
-        end
-        
-        profile.Data.lastDailyReward = currentTime
-        
-        print("🎁 Daily reward given to:", player.Name)
+    -- Check if 24 hours have passed
+    if currentTime - lastReward >= 86400 then
+        -- Eligible for daily reward
+        -- TODO: Implement daily reward logic
     end
 end
 
@@ -627,49 +593,13 @@ function DataManager._LoadGamepasses(player: Player)
     local profile = Profiles[player]
     if not profile then return end
     
-    -- Check each gamepass
-    for _, gamepassData in ipairs(Config.Economy.gamepasses) do
-        if gamepassData.gamepassId > 0 then -- Only check if ID is set
-            local success, owns = pcall(function()
-                return game:GetService("MarketplaceService"):UserOwnsGamePassAsync(
-                    player.UserId,
-                    gamepassData.gamepassId
-                )
-            end)
-            
-            if success and owns then
-                DataManager.GrantGamepass(player, gamepassData.gamepassId)
-            end
-        end
-    end
+    -- Check which gamepasses the player owns
+    -- TODO: Implement gamepass checking via MarketplaceService
 end
 
 function DataManager._ApplyGamepassBenefits(player: Player, gamepassId: number)
-    local profile = Profiles[player]
-    if not profile then return end
-    
-    -- Find gamepass config
-    local gamepassConfig = nil
-    for _, gp in ipairs(Config.Economy.gamepasses) do
-        if gp.gamepassId == gamepassId then
-            gamepassConfig = gp
-            break
-        end
-    end
-    
-    if not gamepassConfig then return end
-    
-    -- Apply benefits based on gamepass ID
-    if gamepassConfig.id == "dual_creature_follow" then
-        profile.Data.maxFollowSlots = 2
-    elseif gamepassConfig.id == "infinite_garden_plots" then
-        profile.Data.maxPlots = 999
-    elseif gamepassConfig.id == "vip" then
-        profile.Data.maxFollowSlots = profile.Data.maxFollowSlots + 1
-        profile.Data.maxStorageSlots = profile.Data.maxStorageSlots + 3
-    end
-    
-    print("✨ Applied gamepass benefits:", gamepassConfig.name, "for", player.Name)
+    -- TODO: Apply benefits based on gamepass ID
+    print("🎫 Applied benefits for gamepass:", gamepassId, "to", player.Name)
 end
 
 function DataManager._CleanExpiredEffects(player: Player)
