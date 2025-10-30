@@ -249,10 +249,18 @@ function InventoryController._RefreshInventoryDisplay()
             if itemData and itemData.quantity > 0 then
                 -- Show item
                 if itemIcon then
-                    itemIcon.Visible = true
-                    -- TODO: Set item icon image based on itemData.itemId
-                    -- itemIcon.Image = "rbxassetid://" .. itemData.iconId
-                end
+    itemIcon.Visible = true
+    
+    -- Look up the seed config to get its icon
+    local seedConfig = InventoryController._GetSeedConfig(itemData.itemId)
+    if seedConfig and seedConfig.icon then
+        itemIcon.Image = seedConfig.icon
+    else
+        -- Fallback: hide icon if no config found
+        itemIcon.Visible = false
+        warn("⚠️  No icon found for item:", itemData.itemId)
+    end
+end
                 
                 if quantityLabel then
                     quantityLabel.Visible = true

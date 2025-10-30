@@ -29,9 +29,10 @@ local Seeds = {
             description = "A bright, cheerful seed that grows into a sunflower.",
             rarity = "Common",
             plantType = "sunflower",
-            icon = "rbxassetid://1", -- Replace with actual asset ID
+            icon = "rbxassetid://125452722728732",
+            modelId = "rbxassetid://123456789",
             stackSize = 99,
-            sellPrice = 5, -- coins
+            sellPrice = 5,
         },
         
         {
