@@ -29,7 +29,7 @@ local Seeds = {
             description = "A bright, cheerful seed that grows into a sunflower.",
             rarity = "Common",
             plantType = "sunflower",
-            icon = "rbxassetid://0", -- Replace with actual asset ID
+            icon = "rbxassetid://1", -- Replace with actual asset ID
             stackSize = 99,
             sellPrice = 5, -- coins
         },
@@ -51,7 +51,7 @@ local Seeds = {
             description = "Basic grass that grows quickly.",
             rarity = "Common",
             plantType = "grass",
-            icon = "rbxassetid://0",
+            icon = "rbxassetid://2",
             stackSize = 99,
             sellPrice = 3,
         },
