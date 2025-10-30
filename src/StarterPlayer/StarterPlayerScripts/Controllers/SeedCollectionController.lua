@@ -1,18 +1,18 @@
 --[[
-    SeedCollectionController.lua - FIXED VERSION
+    SeedCollectionController.lua - IMPROVED VERSION
     Client-side controller for seed collection mechanics
     
-    ✅ FIXES APPLIED:
-    1. Added feedback for successful collections
-    2. Better proximity detection
-    3. Visual collection animations
-    4. Notification system for collected seeds
+    ✅ IMPROVEMENTS:
+    1. Fixed premature "Seed Collected" notification on join
+    2. Added seed icon display in notifications
+    3. Added rarity-colored glowing border to collection prompt
+    4. Added rarity text to notifications
     
     Features:
     - Click-to-collect interface
-    - Collection visual feedback
-    - Seed highlighting
-    - Collection notifications
+    - Collection visual feedback with seed icons
+    - Seed highlighting with rarity-based borders
+    - Collection notifications with rarity indicators
     - Distance validation
 ]]
 
@@ -29,6 +29,14 @@ local UserInputService = game:GetService("UserInputService")
 local SEED_TAG = "SeedSpawn"
 local COLLECTION_RANGE = 15
 local HIGHLIGHT_RANGE = 20
+
+-- Rarity Colors
+local RARITY_COLORS = {
+    common = Color3.fromRGB(100, 255, 100),
+    uncommon = Color3.fromRGB(100, 150, 255),
+    rare = Color3.fromRGB(200, 100, 255),
+    legendary = Color3.fromRGB(255, 50, 50)
+}
 
 -- State
 local player = Players.LocalPlayer
@@ -48,6 +56,7 @@ local SeedCollectedEvent = RemoteEvents:WaitForChild("SeedCollected")
 local playerGui = player:WaitForChild("PlayerGui")
 local seedPrompt = nil
 local notificationGui = nil
+local promptBorder = nil -- ✅ NEW: Reference to the glowing border
 
 -- ============================
 -- INITIALIZATION
@@ -69,6 +78,7 @@ function SeedCollectionController.Init()
     SeedCollectionController._SetupInput()
     
     -- ✅ FIX: Listen for collection success from server
+    -- Only triggers when server actually confirms a collection
     SeedCollectedEvent.OnClientEvent:Connect(function(seedInfo)
         SeedCollectionController._OnSeedCollected(seedInfo)
     end)
@@ -219,6 +229,37 @@ function SeedCollectionController._CreateUI()
     corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = prompt
     
+    -- ✅ NEW: Create glowing border using UIStroke
+    local border = Instance.new("UIStroke")
+    border.Name = "RarityBorder"
+    border.Thickness = 3
+    border.Color = Color3.fromRGB(100, 255, 100) -- Default green
+    border.Transparency = 0
+    border.Parent = prompt
+    promptBorder = border
+    
+    -- ✅ NEW: Add pulsing glow effect
+    task.spawn(function()
+        while true do
+            if prompt.Visible then
+                -- Pulse the border
+                local pulseIn = TweenService:Create(border, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                    Thickness = 5
+                })
+                pulseIn:Play()
+                pulseIn.Completed:Wait()
+                
+                local pulseOut = TweenService:Create(border, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+                    Thickness = 3
+                })
+                pulseOut:Play()
+                pulseOut.Completed:Wait()
+            else
+                task.wait(0.5)
+            end
+        end
+    end)
+    
     local icon = Instance.new("TextLabel")
     icon.Name = "Icon"
     icon.Size = UDim2.new(0, 40, 0, 40)
@@ -243,7 +284,7 @@ function SeedCollectionController._CreateUI()
     
     seedPrompt = prompt
     
-    -- ✅ FIX: Create notification system
+    -- ✅ Create notification system
     SeedCollectionController._CreateNotificationUI(screenGui)
 end
 
@@ -262,20 +303,45 @@ function SeedCollectionController._CreateNotificationUI(screenGui: ScreenGui)
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = notifFrame
     
-    local icon = Instance.new("TextLabel")
+    -- ✅ NEW: Icon now uses ImageLabel for seed icons
+    local iconFrame = Instance.new("Frame")
+    iconFrame.Name = "IconFrame"
+    iconFrame.Size = UDim2.new(0, 50, 0, 50)
+    iconFrame.Position = UDim2.new(0, 15, 0.5, 0)
+    iconFrame.AnchorPoint = Vector2.new(0, 0.5)
+    iconFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+    iconFrame.BorderSizePixel = 0
+    iconFrame.Parent = notifFrame
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 8)
+    iconCorner.Parent = iconFrame
+    
+    -- ImageLabel for seed icon
+    local icon = Instance.new("ImageLabel")
     icon.Name = "Icon"
-    icon.Size = UDim2.new(0, 50, 0, 50)
-    icon.Position = UDim2.new(0, 15, 0.5, 0)
-    icon.AnchorPoint = Vector2.new(0, 0.5)
+    icon.Size = UDim2.new(0.8, 0, 0.8, 0)
+    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Text = "✅"
-    icon.TextScaled = true
-    icon.Parent = notifFrame
+    icon.Image = "" -- Will be set dynamically
+    icon.ScaleType = Enum.ScaleType.Fit
+    icon.Parent = iconFrame
+    
+    -- Fallback emoji text (if no image available)
+    local emojiIcon = Instance.new("TextLabel")
+    emojiIcon.Name = "EmojiIcon"
+    emojiIcon.Size = UDim2.new(1, 0, 1, 0)
+    emojiIcon.BackgroundTransparency = 1
+    emojiIcon.Text = "✅"
+    emojiIcon.TextScaled = true
+    emojiIcon.Visible = false -- Hidden by default
+    emojiIcon.Parent = iconFrame
     
     local titleLabel = Instance.new("TextLabel")
     titleLabel.Name = "Title"
     titleLabel.Size = UDim2.new(1, -80, 0, 25)
-    titleLabel.Position = UDim2.new(0, 70, 0, 15)
+    titleLabel.Position = UDim2.new(0, 70, 0, 10)
     titleLabel.BackgroundTransparency = 1
     titleLabel.TextColor3 = Color3.new(1, 1, 1)
     titleLabel.Font = Enum.Font.SourceSansBold
@@ -287,7 +353,7 @@ function SeedCollectionController._CreateNotificationUI(screenGui: ScreenGui)
     local detailLabel = Instance.new("TextLabel")
     detailLabel.Name = "Detail"
     detailLabel.Size = UDim2.new(1, -80, 0, 20)
-    detailLabel.Position = UDim2.new(0, 70, 0, 45)
+    detailLabel.Position = UDim2.new(0, 70, 0, 35)
     detailLabel.BackgroundTransparency = 1
     detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
     detailLabel.Font = Enum.Font.SourceSans
@@ -295,6 +361,19 @@ function SeedCollectionController._CreateNotificationUI(screenGui: ScreenGui)
     detailLabel.Text = "Common Seed"
     detailLabel.TextXAlignment = Enum.TextXAlignment.Left
     detailLabel.Parent = notifFrame
+    
+    -- ✅ NEW: Rarity text label
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Name = "rarity"
+    rarityLabel.Size = UDim2.new(1, -80, 0, 18)
+    rarityLabel.Position = UDim2.new(0, 70, 0, 55)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    rarityLabel.Font = Enum.Font.SourceSansBold
+    rarityLabel.TextSize = 14
+    rarityLabel.Text = "common"
+    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rarityLabel.Parent = notifFrame
     
     notificationGui = notifFrame
 end
@@ -308,6 +387,12 @@ function SeedCollectionController._ShowPrompt(seedModel: Instance)
         label.Text = "Collect " .. seedName:gsub("_", " ")
     end
     
+    -- ✅ NEW: Update border color based on seed rarity
+    local rarity = SeedCollectionController._GetSeedRarity(seedModel)
+    if promptBorder and RARITY_COLORS[rarity] then
+        promptBorder.Color = RARITY_COLORS[rarity]
+    end
+    
     seedPrompt.Visible = true
 end
 
@@ -317,34 +402,87 @@ function SeedCollectionController._HidePrompt()
     end
 end
 
--- ✅ FIX: Show notification when seed is collected
+-- ✅ NEW: Helper function to get seed rarity
+function SeedCollectionController._GetSeedRarity(seedModel: Instance): string
+    -- Try to get rarity from SeedData attribute
+    local rarity = seedModel:GetAttribute("rarity")
+    if rarity then
+        return rarity:lower()
+    end
+    
+    -- Try to get from SeedData child
+    local seedData = seedModel:FindFirstChild("SeedData")
+    if seedData then
+        local rarityValue = seedData:FindFirstChild("rarity")
+        if rarityValue and rarityValue:IsA("StringValue") then
+            return rarityValue.Value:lower()
+        end
+    end
+    
+    -- Default to common
+    return "common"
+end
+
+-- ✅ IMPROVED: Show notification when seed is collected
 function SeedCollectionController._ShowNotification(seedInfo: any)
     if not notificationGui then return end
     
     -- Update notification text
     local titleLabel = notificationGui:FindFirstChild("Title")
     local detailLabel = notificationGui:FindFirstChild("Detail")
+    local rarityLabel = notificationGui:FindFirstChild("rarity")
+    local iconFrame = notificationGui:FindFirstChild("IconFrame")
     
     if titleLabel then
         titleLabel.Text = "Seed Collected!"
     end
     
+    local seedName = seedInfo.seedName or "Seed"
+    local rarity = seedInfo.rarity or "common"
+    local rarityLower = rarity:lower()
+    
     if detailLabel then
-        local seedName = seedInfo.seedName or "Seed"
-        local rarity = seedInfo.rarity or "common"
-        detailLabel.Text = rarity:sub(1,1):upper() .. rarity:sub(2) .. " - " .. seedName
+        detailLabel.Text = seedName:gsub("_", " ")
+        detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    end
+    
+    -- ✅ NEW: Update rarity label
+    if rarityLabel then
+        rarityLabel.Text = rarity:upper()
         
         -- Color by rarity
-        if rarity == "common" then
-            detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        elseif rarity == "uncommon" then
-            detailLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-        elseif rarity == "rare" then
-            detailLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
-        elseif rarity == "epic" then
-            detailLabel.TextColor3 = Color3.fromRGB(200, 100, 255)
-        elseif rarity == "legendary" then
-            detailLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+        if RARITY_COLORS[rarityLower] then
+            rarityLabel.TextColor3 = RARITY_COLORS[rarityLower]
+        else
+            rarityLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        end
+    end
+    
+    -- ✅ NEW: Update seed icon
+    if iconFrame then
+        local icon = iconFrame:FindFirstChild("Icon")
+        local emojiIcon = iconFrame:FindFirstChild("EmojiIcon")
+        
+        if icon and emojiIcon then
+            -- Try to use the seed's icon if available
+            local iconId = seedInfo.icon or seedInfo.iconId
+            
+            if iconId and iconId ~= "" then
+                -- Set the image
+                icon.Image = iconId
+                icon.Visible = true
+                emojiIcon.Visible = false
+            else
+                -- Fallback to emoji
+                icon.Visible = false
+                emojiIcon.Visible = true
+                emojiIcon.Text = "🌱"
+            end
+        end
+        
+        -- Color the icon frame border by rarity
+        if RARITY_COLORS[rarityLower] then
+            iconFrame.BackgroundColor3 = RARITY_COLORS[rarityLower]
         end
     end
     
@@ -425,6 +563,7 @@ function SeedCollectionController._TryCollect(seedModel: Instance)
 end
 
 -- ✅ FIX: Called when server confirms collection
+-- This is the ONLY place a notification should appear
 function SeedCollectionController._OnSeedCollected(seedInfo: any)
     print("✅ Seed collected on client:", seedInfo.seedName)
     

@@ -268,7 +268,7 @@ function SeedSpawnController._SelectRandomSeed(allowedSeeds: {string}): string?
                 or seedConfig.rarity == "uncommon" and 50
                 or seedConfig.rarity == "rare" and 25
                 or seedConfig.rarity == "epic" and 10
-                or seedConfig.rarity == "legendary" and 5
+                or seedConfig.rarity == "legendary" and 1
                 or 50
             
             table.insert(seedWeights, {
@@ -497,7 +497,8 @@ function SeedSpawnController.CollectSeed(player: Player, seedModel: Instance): b
         SeedCollectedEvent:FireClient(player, {
             seedId = seedData.seedId,
             seedName = seedName,
-            rarity = seedData.config.rarity
+            rarity = seedData.config.rarity,
+            icon = seedData.config.icon,  -- Add this!
         })
     end
     
