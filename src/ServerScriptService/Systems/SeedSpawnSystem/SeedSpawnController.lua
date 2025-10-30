@@ -331,15 +331,13 @@ function SeedSpawnController._CreateSeedInstance(seedConfig: any, position: Vect
     
     -- Color based on rarity
     if seedConfig.rarity == "common" then
-        seedPart.Color = Color3.fromRGB(200, 200, 200)
-    elseif seedConfig.rarity == "uncommon" then
         seedPart.Color = Color3.fromRGB(100, 200, 100)
-    elseif seedConfig.rarity == "rare" then
+    elseif seedConfig.rarity == "uncommon" then
         seedPart.Color = Color3.fromRGB(100, 100, 255)
-    elseif seedConfig.rarity == "epic" then
-        seedPart.Color = Color3.fromRGB(180, 100, 255)
+    elseif seedConfig.rarity == "rare" then
+        seedPart.Color = Color3.fromRGB(200, 100, 255)
     elseif seedConfig.rarity == "legendary" then
-        seedPart.Color = Color3.fromRGB(255, 200, 50)
+        seedPart.Color = Color3.fromRGB(255, 50, 50)
     end
     
     seedPart.Parent = seedModel

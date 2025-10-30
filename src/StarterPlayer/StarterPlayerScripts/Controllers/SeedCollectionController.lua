@@ -32,8 +32,8 @@ local HIGHLIGHT_RANGE = 20
 
 -- Rarity Colors
 local RARITY_COLORS = {
-    common = Color3.fromRGB(100, 255, 100),
-    uncommon = Color3.fromRGB(100, 150, 255),
+    common = Color3.fromRGB(100, 200, 100),
+    uncommon = Color3.fromRGB(100, 100, 255),
     rare = Color3.fromRGB(200, 100, 255),
     legendary = Color3.fromRGB(255, 50, 50)
 }
