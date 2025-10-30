@@ -88,11 +88,17 @@ function InventoryController.Start()
         inventoryUI = uiModule.Create()
         
         -- Setup close button
-        local closeButton = inventoryUI:FindFirstDescendant("CloseButton")
-        if closeButton then
-            closeButton.Activated:Connect(function()
-                InventoryController.CloseInventory()
-            end)
+        local mainFrame = inventoryUI:FindFirstChild("MainFrame")
+        if mainFrame then
+            local titleBar = mainFrame:FindFirstChild("TitleBar")
+            if titleBar then
+                local closeButton = titleBar:FindFirstChild("CloseButton")
+                if closeButton then
+                    closeButton.Activated:Connect(function()
+                        InventoryController.CloseInventory()
+                    end)
+                end
+            end
         end
         print("✅ Inventory UI created")
     else
@@ -217,10 +223,16 @@ end
 function InventoryController._RefreshInventoryDisplay()
     if not inventoryUI then return end
     
-    -- Find inventory slots container
-    local slotsContainer = inventoryUI:FindFirstChild("SlotsContainer")
+    -- Find inventory slots container (it's inside MainFrame)
+    local mainFrame = inventoryUI:FindFirstChild("MainFrame")
+    if not mainFrame then
+        warn("⚠️  MainFrame not found in InventoryUI")
+        return
+    end
+    
+    local slotsContainer = mainFrame:FindFirstChild("SlotsContainer")
     if not slotsContainer then
-        warn("⚠️  SlotsContainer not found in InventoryUI")
+        warn("⚠️  SlotsContainer not found in MainFrame")
         return
     end
     
