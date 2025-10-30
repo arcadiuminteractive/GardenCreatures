@@ -1,19 +1,23 @@
 --[[
-    DataManager.lua - FIXED VERSION
-    Manages all player data persistence using ProfileStore
+    DataManager.lua - REFACTORED VERSION
+    Manages player progression data using ProfileStore
     
-    ✅ FIXES APPLIED:
-    1. Moved internal helper functions BEFORE they're called
-    2. Changed to local functions to prevent "attempt to call nil" errors
-    3. Proper function ordering to avoid undefined reference issues
+    ✅ REFACTORED:
+    1. Removed inventory management (now handled by InventoryManager)
+    2. Focuses on: currency, XP, level, creatures, gardens, progression, stats
+    3. Clean separation of concerns
     
     Responsibilities:
     - Load/save player data
-    - Provide safe data access
-    - Handle player joins/leaves
-    - Manage currency operations
-    - Inventory management helpers
-    - Data validation
+    - Manage currency (coins, gems)
+    - Manage XP and leveling
+    - Manage creatures (NOT inventory items)
+    - Manage garden plots
+    - Manage progression (recipes, discoveries)
+    - Manage stats and settings
+    
+    NOT responsible for:
+    - Inventory management (use InventoryManager)
 ]]
 
 local DataManager = {}
@@ -23,8 +27,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
--- ProfileStore (Install from: https://github.com/MadStudioRoblox/ProfileStore)
--- Place ProfileStore module in ServerScriptService or ReplicatedStorage
+-- ProfileStore
 local ProfileStoreModule = require(ServerScriptService:WaitForChild("ProfileStore"))
 
 -- Configuration
@@ -57,12 +60,8 @@ function DataManager.GetDefaultData()
         xp = 0,
         level = 1,
         
-        -- Inventory
-        inventory = {
-            seeds = {},    -- {seedId = count}
-            plants = {},   -- {plantId = count}
-            materials = {}, -- {materialId = count}
-        },
+        -- ✅ REMOVED: Inventory is now handled by InventoryManager
+        -- Inventory data is stored separately in InventoryManager's own system
         
         -- Creatures
         creatures = {},         -- Array of creature data
@@ -112,7 +111,6 @@ local ProfileStore = ProfileStoreModule.New(
 
 -- ============================
 -- INTERNAL HELPER FUNCTIONS
--- ✅ MOVED TO TOP - These must be defined BEFORE they're called
 -- ============================
 
 local function _CheckDailyReward(player: Player)
@@ -122,10 +120,7 @@ local function _CheckDailyReward(player: Player)
     local lastReward = profile.Data.lastDailyReward
     local currentTime = os.time()
     
-    -- Check if 24 hours have passed
     if currentTime - lastReward >= 86400 then
-        -- Eligible for daily reward
-        -- TODO: Implement daily reward logic
         profile.Data.lastDailyReward = currentTime
     end
 end
@@ -134,12 +129,10 @@ local function _LoadGamepasses(player: Player)
     local profile = Profiles[player]
     if not profile then return end
     
-    -- Check which gamepasses the player owns
     -- TODO: Implement gamepass checking via MarketplaceService
 end
 
 local function _ApplyGamepassBenefits(player: Player, gamepassId: number)
-    -- TODO: Apply benefits based on gamepass ID
     print("🎫 Applied benefits for gamepass:", gamepassId, "to", player.Name)
 end
 
@@ -162,25 +155,13 @@ local function _CleanExpiredEffects(player: Player)
 end
 
 local function _OnDataLoaded(player: Player)
-    -- Fire event for other systems
-    -- TODO: Create a RemoteEvent or BindableEvent for this
     print("📊 Data loaded for:", player.Name)
 end
-
--- Expose internal functions for external access if needed
-DataManager._CheckDailyReward = _CheckDailyReward
-DataManager._LoadGamepasses = _LoadGamepasses
-DataManager._ApplyGamepassBenefits = _ApplyGamepassBenefits
-DataManager._CleanExpiredEffects = _CleanExpiredEffects
-DataManager._OnDataLoaded = _OnDataLoaded
 
 -- ============================
 -- CORE PROFILE MANAGEMENT
 -- ============================
 
---[[
-    Initialize a player's profile when they join
-]]
 function DataManager.InitializePlayer(player: Player)
     local profile = ProfileStore:StartSessionAsync(
         "Player_" .. player.UserId,
@@ -192,8 +173,8 @@ function DataManager.InitializePlayer(player: Player)
     )
     
     if profile ~= nil then
-        profile:AddUserId(player.UserId) -- GDPR compliance
-        profile:Reconcile() -- Fill in missing data with defaults
+        profile:AddUserId(player.UserId)
+        profile:Reconcile()
         
         profile.OnSessionEnd:Connect(function()
             Profiles[player] = nil
@@ -217,26 +198,20 @@ function DataManager.InitializePlayer(player: Player)
             
             print("✅ Loaded profile for:", player.Name)
             
-            -- Fire data loaded event
             _OnDataLoaded(player)
             
             return true
         else
-            -- Player left before profile loaded
             profile:EndSession()
             return false
         end
     else
-        -- Failed to load profile
         warn("❌ Failed to load profile for:", player.Name)
         player:Kick("Failed to load your data. Please rejoin!")
         return false
     end
 end
 
---[[
-    Safely access a player's data (read-only)
-]]
 function DataManager.GetData(player: Player)
     local profile = Profiles[player]
     if profile then
@@ -245,17 +220,10 @@ function DataManager.GetData(player: Player)
     return nil
 end
 
---[[
-    Get a player's profile (for direct manipulation)
-    Use sparingly - prefer specific methods
-]]
 function DataManager.GetProfile(player: Player)
     return Profiles[player]
 end
 
---[[
-    Save a player's profile
-]]
 function DataManager.SavePlayer(player: Player): boolean
     local profile = Profiles[player]
     if profile then
@@ -266,9 +234,6 @@ function DataManager.SavePlayer(player: Player): boolean
     return false
 end
 
---[[
-    Handle player leaving - save and release profile
-]]
 function DataManager.PlayerRemoving(player: Player)
     local profile = Profiles[player]
     if profile then
@@ -299,7 +264,6 @@ function DataManager.AddCurrency(player: Player, currencyType: string, amount: n
     if profile.Data[currency] then
         profile.Data[currency] = profile.Data[currency] + amount
         
-        -- Update stats
         if currency == "coins" then
             profile.Data.stats.coinsEarned = profile.Data.stats.coinsEarned + amount
         end
@@ -317,7 +281,6 @@ function DataManager.RemoveCurrency(player: Player, currencyType: string, amount
     if profile.Data[currency] and profile.Data[currency] >= amount then
         profile.Data[currency] = profile.Data[currency] - amount
         
-        -- Update stats
         if currency == "gems" then
             profile.Data.stats.gemsSpent = profile.Data.stats.gemsSpent + amount
         end
@@ -340,50 +303,9 @@ function DataManager.SetCurrency(player: Player, currencyType: string, amount: n
 end
 
 -- ============================
--- INVENTORY METHODS
+-- ⛔ INVENTORY METHODS REMOVED
+-- Use InventoryManager instead for all inventory operations
 -- ============================
-
-function DataManager.AddItem(player: Player, itemType: string, itemId: string, amount: number): boolean
-    local profile = Profiles[player]
-    if not profile then return false end
-    
-    local inventory = profile.Data.inventory[itemType]
-    if not inventory then return false end
-    
-    inventory[itemId] = (inventory[itemId] or 0) + amount
-    return true
-end
-
-function DataManager.RemoveItem(player: Player, itemType: string, itemId: string, amount: number): boolean
-    local profile = Profiles[player]
-    if not profile then return false end
-    
-    local inventory = profile.Data.inventory[itemType]
-    if not inventory or not inventory[itemId] or inventory[itemId] < amount then
-        return false
-    end
-    
-    inventory[itemId] = inventory[itemId] - amount
-    
-    -- Remove entry if 0
-    if inventory[itemId] <= 0 then
-        inventory[itemId] = nil
-    end
-    
-    return true
-end
-
-function DataManager.GetItemCount(player: Player, itemType: string, itemId: string): number
-    local data = DataManager.GetData(player)
-    if data and data.inventory[itemType] then
-        return data.inventory[itemType][itemId] or 0
-    end
-    return 0
-end
-
-function DataManager.HasItem(player: Player, itemType: string, itemId: string, amount: number): boolean
-    return DataManager.GetItemCount(player, itemType, itemId) >= amount
-end
 
 -- ============================
 -- CREATURE METHODS
@@ -394,8 +316,6 @@ function DataManager.AddCreature(player: Player, creatureData: any): boolean
     if not profile then return false end
     
     table.insert(profile.Data.creatures, creatureData)
-    
-    -- Update stats
     profile.Data.stats.creaturesDiscovered = profile.Data.stats.creaturesDiscovered + 1
     
     return true
@@ -434,12 +354,10 @@ function DataManager.SetActiveCreatures(player: Player, instanceIds: {string}): 
     local profile = Profiles[player]
     if not profile then return false end
     
-    -- Validate count
     if #instanceIds > profile.Data.maxFollowSlots then
         return false
     end
     
-    -- Validate all creatures exist
     for _, instanceId in ipairs(instanceIds) do
         if not DataManager.GetCreature(player, instanceId) then
             return false
@@ -458,7 +376,6 @@ function DataManager.AddGardenPlot(player: Player, plotData: any): boolean
     local profile = Profiles[player]
     if not profile then return false end
     
-    -- Check plot limit
     if #profile.Data.gardenPlots >= profile.Data.maxPlots then
         return false
     end
@@ -506,8 +423,7 @@ function DataManager.AddXP(player: Player, amount: number): boolean
     
     profile.Data.xp = profile.Data.xp + amount
     
-    -- Check for level up
-    -- TODO: Implement level-up logic based on XP thresholds
+    -- TODO: Implement level-up logic
     
     return true
 end
@@ -553,7 +469,6 @@ end
 
 -- ============================
 -- GAMEPASS METHODS
--- ✅ FIXED - Now calls local functions that are already defined above
 -- ============================
 
 function DataManager.GrantGamepass(player: Player, gamepassId: number): boolean
@@ -562,10 +477,7 @@ function DataManager.GrantGamepass(player: Player, gamepassId: number): boolean
     
     if not table.find(profile.Data.ownedGamepasses, gamepassId) then
         table.insert(profile.Data.ownedGamepasses, gamepassId)
-        
-        -- Apply gamepass benefits (✅ FIXED - now works!)
         _ApplyGamepassBenefits(player, gamepassId)
-        
         return true
     end
     
@@ -666,10 +578,10 @@ game:BindToClose(function()
         end
     end
     
-    -- Wait for ProfileStore to finish saving
     task.wait(3)
 end)
 
 print("✅ DataManager loaded successfully!")
+print("📦 Inventory is managed separately by InventoryManager")
 
 return DataManager

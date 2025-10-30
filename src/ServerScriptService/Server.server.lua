@@ -18,6 +18,8 @@ print("🌱 Garden Creatures - Server Starting...")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local AdminCommands = require(ServerScriptService.AdminCommands)
+   AdminCommands.Init()
 
 -- Wait for critical folders
 local Systems = ServerScriptService:WaitForChild("Systems")
@@ -123,6 +125,7 @@ local LoadedSystems = {
 local SystemsToLoad = {
     { folder = "SeedSpawnSystem", module = "SeedSpawnController" },
     { folder = "InventorySystem", module = "InventoryManager" },
+    
     -- Uncomment these as you implement them:
     -- { folder = "EconomySystem", module = "CurrencyManager" },
     -- { folder = "GardeningSystem", module = "PlantManager" },
