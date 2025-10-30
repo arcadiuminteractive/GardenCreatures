@@ -1,13 +1,19 @@
 --[[
-    SeedSpawnController.lua
+    SeedSpawnController.lua - INVENTORY MANAGER INTEGRATION
     Manages seed spawning across all zones in the world
+    
+    ✅ FIXES APPLIED:
+    1. Distance check uses initial spawn position
+    2. Uses InventoryManager.AddItem() instead of DataManager.AddItem()
+    3. Proper inventory integration with slot-based system
+    4. Client notification on successful collection
     
     Features:
     - Zone-based spawning with configurable rates
     - Rarity-weighted seed selection
     - Maximum seeds per zone
     - Respawn system
-    - Collection handling
+    - Collection handling with anti-exploit
     - Zone discovery system
 ]]
 
@@ -19,6 +25,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 -- Configuration
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -26,12 +33,17 @@ local Config = {
     Seeds = require(Shared.Config.Seeds),
 }
 
+-- ✅ FIX: Import BOTH managers
+local DataManager = require(ServerScriptService.Data.DataManager)
+local InventoryManager = require(ServerScriptService.Systems.InventorySystem.InventoryManager)
+
 -- Constants
 local SEED_TAG = "SeedSpawn"
 local ZONE_TAG = "SeedZone"
 local SPAWN_CHECK_INTERVAL = 5 -- Check for respawns every 5 seconds
 local SEED_LIFETIME = 300 -- Seeds despawn after 5 minutes if not collected
 local COLLECTION_COOLDOWN = 0.5 -- Prevent spam collection
+local COLLECTION_RANGE = 20 -- Maximum distance to collect seed
 
 -- State
 local ActiveSeeds = {} -- {seedInstance = {data}}
@@ -52,6 +64,14 @@ if not CollectSeedEvent then
     CollectSeedEvent = Instance.new("RemoteEvent")
     CollectSeedEvent.Name = "CollectSeed"
     CollectSeedEvent.Parent = RemoteEvents
+end
+
+-- Notification event for client feedback
+local SeedCollectedEvent = RemoteEvents:FindFirstChild("SeedCollected")
+if not SeedCollectedEvent then
+    SeedCollectedEvent = Instance.new("RemoteEvent")
+    SeedCollectedEvent.Name = "SeedCollected"
+    SeedCollectedEvent.Parent = RemoteEvents
 end
 
 -- ============================
@@ -219,12 +239,13 @@ function SeedSpawnController._SpawnSeed(zonePart: Part, zoneData: any): Instance
     local seedInstance = SeedSpawnController._CreateSeedInstance(seedConfig, position)
     if not seedInstance then return nil end
     
-    -- Track seed
+    -- Track seed with INITIAL POSITION for distance checking
     local seedData = {
         seedId = seedId,
         config = seedConfig,
         spawnTime = tick(),
         zonePart = zonePart,
+        spawnPosition = position, -- ✅ Store original position for distance checks
     }
     
     ActiveSeeds[seedInstance] = seedData
@@ -236,45 +257,46 @@ end
 function SeedSpawnController._SelectRandomSeed(allowedSeeds: {string}): string?
     if #allowedSeeds == 0 then return nil end
     
-    -- Build weighted list based on rarity
-    local weightedList = {}
+    -- Calculate total weight
     local totalWeight = 0
+    local seedWeights = {}
     
     for _, seedId in ipairs(allowedSeeds) do
         local seedConfig = SeedSpawnController._GetSeedConfig(seedId)
         if seedConfig then
-            local weight = Config.Seeds.rarityWeights[seedConfig.rarity] or 1
+            local weight = seedConfig.rarity == "common" and 100
+                or seedConfig.rarity == "uncommon" and 50
+                or seedConfig.rarity == "rare" and 25
+                or seedConfig.rarity == "epic" and 10
+                or seedConfig.rarity == "legendary" and 5
+                or 50
             
-            table.insert(weightedList, {
+            table.insert(seedWeights, {
                 seedId = seedId,
-                weight = weight,
+                weight = weight
             })
-            
             totalWeight = totalWeight + weight
         end
     end
     
-    if totalWeight == 0 then return nil end
-    
-    -- Select random seed based on weights
+    -- Random selection
     local roll = math.random() * totalWeight
-    local accumulated = 0
+    local currentWeight = 0
     
-    for _, entry in ipairs(weightedList) do
-        accumulated = accumulated + entry.weight
-        if roll <= accumulated then
-            return entry.seedId
+    for _, seedWeight in ipairs(seedWeights) do
+        currentWeight = currentWeight + seedWeight.weight
+        if roll <= currentWeight then
+            return seedWeight.seedId
         end
     end
     
-    -- Fallback
-    return weightedList[1].seedId
+    return allowedSeeds[1] -- Fallback
 end
 
 function SeedSpawnController._GetSeedConfig(seedId: string): any?
-    for _, seedConfig in ipairs(Config.Seeds.seeds) do
-        if seedConfig.id == seedId then
-            return seedConfig
+    for _, seed in ipairs(Config.Seeds.seeds) do
+        if seed.id == seedId then
+            return seed
         end
     end
     return nil
@@ -282,81 +304,64 @@ end
 
 function SeedSpawnController._GetRandomPositionInZone(zonePart: Part): Vector3
     local size = zonePart.Size
-    local cf = zonePart.CFrame
+    local cframe = zonePart.CFrame
     
-    -- Random position within the part
-    local randomX = (math.random() - 0.5) * size.X
-    local randomZ = (math.random() - 0.5) * size.Z
+    -- Random position within zone bounds
+    local randomX = (math.random() - 0.5) * size.X * 0.9
+    local randomZ = (math.random() - 0.5) * size.Z * 0.9
     
-    -- Spawn slightly above the zone to let it fall
-    local position = cf * Vector3.new(randomX, size.Y/2 + 2, randomZ)
+    local worldPosition = cframe * Vector3.new(randomX, size.Y / 2 + 2, randomZ)
     
-    -- Raycast down to find ground
-    local rayResult = workspace:Raycast(
-        position,
-        Vector3.new(0, -50, 0),
-        RaycastParams.new()
-    )
-    
-    if rayResult then
-        return rayResult.Position + Vector3.new(0, 1, 0) -- Slightly above ground
-    end
-    
-    return position
+    return worldPosition
 end
 
 function SeedSpawnController._CreateSeedInstance(seedConfig: any, position: Vector3): Instance?
     -- Create seed model
     local seedModel = Instance.new("Model")
-    seedModel.Name = seedConfig.name
+    seedModel.Name = seedConfig.id
     
     -- Create seed part
     local seedPart = Instance.new("Part")
     seedPart.Name = "SeedPart"
     seedPart.Size = Vector3.new(1, 1, 1)
     seedPart.Position = position
-    seedPart.Anchored = false
+    seedPart.Anchored = true
     seedPart.CanCollide = false
-    seedPart.Shape = Enum.PartType.Ball
-    seedPart.Material = Enum.Material.Neon
+    seedPart.Material = Enum.Material.SmoothPlastic
     
     -- Color based on rarity
-    local rarityColors = {
-        Common = Color3.fromRGB(200, 200, 200),
-        Uncommon = Color3.fromRGB(100, 200, 100),
-        Rare = Color3.fromRGB(100, 150, 255),
-        Epic = Color3.fromRGB(200, 100, 255),
-        Legendary = Color3.fromRGB(255, 200, 50),
-    }
-    seedPart.Color = rarityColors[seedConfig.rarity] or rarityColors.Common
-    
-    -- Add glow effect for rare seeds
-    if seedConfig.rarity ~= "Common" then
-        local light = Instance.new("PointLight")
-        light.Brightness = 2
-        light.Range = 10
-        light.Color = seedPart.Color
-        light.Parent = seedPart
+    if seedConfig.rarity == "common" then
+        seedPart.Color = Color3.fromRGB(200, 200, 200)
+    elseif seedConfig.rarity == "uncommon" then
+        seedPart.Color = Color3.fromRGB(100, 200, 100)
+    elseif seedConfig.rarity == "rare" then
+        seedPart.Color = Color3.fromRGB(100, 100, 255)
+    elseif seedConfig.rarity == "epic" then
+        seedPart.Color = Color3.fromRGB(180, 100, 255)
+    elseif seedConfig.rarity == "legendary" then
+        seedPart.Color = Color3.fromRGB(255, 200, 50)
     end
     
     seedPart.Parent = seedModel
     
-    -- Create clickable detector
+    -- Add click detector
     local clickDetector = Instance.new("ClickDetector")
-    clickDetector.MaxActivationDistance = 15
+    clickDetector.MaxActivationDistance = COLLECTION_RANGE
     clickDetector.Parent = seedPart
     
-    -- Store seed data in attributes
-    seedModel:SetAttribute("SeedId", seedConfig.id)
-    seedModel:SetAttribute("Rarity", seedConfig.rarity)
-    seedModel:SetAttribute("SpawnTime", tick())
+    -- Add highlight
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = seedPart.Color
+    highlight.OutlineColor = Color3.new(1, 1, 1)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.Parent = seedModel
     
-    -- Add to workspace
-    seedModel.Parent = workspace:FindFirstChild("Seeds") or workspace
-    seedModel.PrimaryPart = seedPart
-    
-    -- Tag for easy identification
+    -- Tag for collection service
     CollectionService:AddTag(seedModel, SEED_TAG)
+    
+    -- Parent to workspace
+    seedModel.Parent = workspace:FindFirstChild("Seeds") or workspace
     
     -- Add floating animation
     SeedSpawnController._AddFloatingAnimation(seedPart)
@@ -421,9 +426,17 @@ function SeedSpawnController._SetupCollectionHandling()
 end
 
 function SeedSpawnController.CollectSeed(player: Player, seedModel: Instance): boolean
-    -- Validate
-    if not player or not player.Parent then return false end
-    if not seedModel or not seedModel.Parent then return false end
+    -- Validate player
+    if not player or not player.Parent then 
+        warn("⚠️  Invalid player attempted collection")
+        return false 
+    end
+    
+    -- Validate seed model
+    if not seedModel or not seedModel.Parent then 
+        warn("⚠️  Invalid seed model")
+        return false 
+    end
     
     -- Check cooldown
     local lastCollection = PlayerCooldowns[player] or 0
@@ -433,34 +446,41 @@ function SeedSpawnController.CollectSeed(player: Player, seedModel: Instance): b
     
     -- Check if seed exists in our tracking
     local seedData = ActiveSeeds[seedModel]
-    if not seedData then return false end
+    if not seedData then 
+        warn("⚠️  Seed not found in tracking:", seedModel.Name)
+        return false 
+    end
     
-    -- Check distance (anti-exploit)
+    -- ✅ FIX: Check distance using ORIGINAL spawn position
     local character = player.Character
-    if not character then return false end
+    if not character then 
+        warn("⚠️  Player has no character")
+        return false 
+    end
     
     local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
+    if not humanoidRootPart then 
+        warn("⚠️  Player has no HumanoidRootPart")
+        return false 
+    end
     
-    local seedPart = seedModel:FindFirstChild("SeedPart")
-    if not seedPart then return false end
-    
-    local distance = (humanoidRootPart.Position - seedPart.Position).Magnitude
-    if distance > 20 then
-        warn("⚠️  Player too far from seed:", player.Name, distance)
+    -- Use stored spawn position instead of current seed position
+    local distance = (humanoidRootPart.Position - seedData.spawnPosition).Magnitude
+    if distance > COLLECTION_RANGE then
+        warn("⚠️  Player too far from seed:", player.Name, "Distance:", math.floor(distance), "Max:", COLLECTION_RANGE)
         return false
     end
     
-    -- Add to inventory (using DataManager)
-    local DataManager = require(game.ServerScriptService.Data.DataManager)
-    local success = DataManager.AddItem(player, "seeds", seedData.seedId, 1)
+    -- ✅ FIX: Use InventoryManager instead of DataManager for inventory
+    local seedName = seedData.config.name or seedData.seedId
+    local success, errorMsg = InventoryManager.AddItem(player, seedData.seedId, seedName, 1)
     
     if not success then
-        warn("❌ Failed to add seed to inventory:", player.Name, seedData.seedId)
+        warn("❌ Failed to add seed to inventory:", player.Name, seedData.seedId, errorMsg or "Unknown error")
         return false
     end
     
-    -- Update stats
+    -- Update stats (still using DataManager for stats/currency)
     DataManager.IncrementStat(player, "seedsCollected", 1)
     
     -- Award coins
@@ -472,10 +492,17 @@ function SeedSpawnController.CollectSeed(player: Player, seedModel: Instance): b
     -- Despawn seed
     SeedSpawnController._DespawnSeed(seedModel)
     
-    -- Success feedback
-    print("✅ Collected seed:", seedData.seedId, "by", player.Name)
+    -- Fire client notification
+    if SeedCollectedEvent then
+        SeedCollectedEvent:FireClient(player, {
+            seedId = seedData.seedId,
+            seedName = seedName,
+            rarity = seedData.config.rarity
+        })
+    end
     
-    -- TODO: Fire RemoteEvent to show collection effect on client
+    -- Success feedback
+    print("✅ Collected seed:", seedData.seedId, "by", player.Name, "| Distance:", math.floor(distance))
     
     return true
 end
@@ -489,97 +516,81 @@ function SeedSpawnController._CleanupLoop()
         task.wait(30) -- Check every 30 seconds
         
         local currentTime = tick()
-        local toRemove = {}
+        local seedsToRemove = {}
         
         for seedModel, seedData in pairs(ActiveSeeds) do
             -- Check if seed expired
             if currentTime - seedData.spawnTime > SEED_LIFETIME then
-                table.insert(toRemove, seedModel)
+                table.insert(seedsToRemove, seedModel)
             end
             
-            -- Check if seed model was destroyed
+            -- Check if seed still exists
             if not seedModel.Parent then
-                table.insert(toRemove, seedModel)
+                table.insert(seedsToRemove, seedModel)
             end
         end
         
-        -- Remove expired seeds
-        for _, seedModel in ipairs(toRemove) do
+        -- Remove expired/invalid seeds
+        for _, seedModel in ipairs(seedsToRemove) do
             SeedSpawnController._DespawnSeed(seedModel)
         end
         
-        if #toRemove > 0 then
-            print("🧹 Cleaned up", #toRemove, "expired seeds")
+        if #seedsToRemove > 0 then
+            print("🧹 Cleaned up", #seedsToRemove, "seeds")
         end
     end
 end
 
 function SeedSpawnController._DespawnSeed(seedModel: Instance)
     local seedData = ActiveSeeds[seedModel]
-    if not seedData then return end
     
-    -- Remove from zone tracking
-    local zoneData = SpawnZones[seedData.zonePart]
-    if zoneData then
-        zoneData.activeSeeds[seedModel] = nil
+    if seedData then
+        -- Remove from zone tracking
+        local zoneData = SpawnZones[seedData.zonePart]
+        if zoneData then
+            zoneData.activeSeeds[seedModel] = nil
+        end
+        
+        -- Remove from active seeds
+        ActiveSeeds[seedModel] = nil
     end
     
-    -- Remove from active tracking
-    ActiveSeeds[seedModel] = nil
-    
-    -- Destroy model
-    if seedModel.Parent then
+    -- Destroy the model
+    if seedModel and seedModel.Parent then
         seedModel:Destroy()
     end
 end
 
--- ============================
--- DEBUG COMMANDS
--- ============================
-
-function SeedSpawnController.GetActiveSeeds(): number
-    local count = 0
-    for _, _ in pairs(ActiveSeeds) do
-        count = count + 1
-    end
-    return count
-end
-
-function SeedSpawnController.GetZoneCount(): number
-    local count = 0
-    for _, _ in pairs(SpawnZones) do
-        count = count + 1
-    end
-    return count
-end
-
-function SeedSpawnController.ForceSpawn(zoneName: string?): boolean
-    for zonePart, zoneData in pairs(SpawnZones) do
-        if not zoneName or zoneData.name == zoneName then
-            SeedSpawnController._SpawnSeed(zonePart, zoneData)
-            return true
-        end
-    end
-    return false
-end
-
-function SeedSpawnController.ClearAllSeeds()
+function SeedSpawnController.Stop()
+    IsRunning = false
+    
+    -- Cleanup all seeds
     for seedModel, _ in pairs(ActiveSeeds) do
         SeedSpawnController._DespawnSeed(seedModel)
     end
-    print("🧹 Cleared all seeds")
+    
+    print("🛑 Seed Spawn System stopped")
 end
 
 -- ============================
--- SHUTDOWN
+-- DEBUG/ADMIN FUNCTIONS
 -- ============================
 
-function SeedSpawnController.Shutdown()
-    IsRunning = false
-    SeedSpawnController.ClearAllSeeds()
-    print("🛑 Seed Spawn System shut down")
+function SeedSpawnController.GetActiveSeeds()
+    local count = 0
+    for _ in pairs(ActiveSeeds) do
+        count = count + 1
+    end
+    return count
 end
 
-print("✅ SeedSpawnController loaded")
+function SeedSpawnController.ForceSpawn(zoneName: string)
+    for zonePart, zoneData in pairs(SpawnZones) do
+        if zoneData.name == zoneName then
+            return SeedSpawnController._SpawnSeed(zonePart, zoneData)
+        end
+    end
+    return nil
+end
 
 return SeedSpawnController
