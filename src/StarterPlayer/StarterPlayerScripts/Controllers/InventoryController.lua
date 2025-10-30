@@ -16,6 +16,8 @@ local InventoryController = {}
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
+local Config = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config")
+local SeedsConfig = require(Config:WaitForChild("Seeds"))
 
 -- Constants
 local INVENTORY_SLOTS = 10
@@ -172,6 +174,15 @@ function InventoryController._SetupInput()
     end)
 end
 
+function InventoryController._GetSeedConfig(seedId: string): any?
+    for _, seed in ipairs(SeedsConfig.seeds) do
+        if seed.id == seedId then
+            return seed
+        end
+    end
+    return nil
+end
+
 -- ============================
 -- INVENTORY MANAGEMENT
 -- ============================
@@ -247,20 +258,24 @@ function InventoryController._RefreshInventoryDisplay()
             local quantityLabel = slotFrame:FindFirstChild("QuantityLabel")
             
             if itemData and itemData.quantity > 0 then
-                -- Show item
-                if itemIcon then
-    itemIcon.Visible = true
-    
-    -- Look up the seed config to get its icon
-    local seedConfig = InventoryController._GetSeedConfig(itemData.itemId)
-    if seedConfig and seedConfig.icon then
-        itemIcon.Image = seedConfig.icon
-    else
-        -- Fallback: hide icon if no config found
-        itemIcon.Visible = false
-        warn("⚠️  No icon found for item:", itemData.itemId)
+    -- Show item
+    if itemIcon then
+        itemIcon.Visible = true
+        
+        -- ✅ Look up seed config and set icon
+        local seedConfig = InventoryController._GetSeedConfig(itemData.itemId)
+        if seedConfig and seedConfig.icon then
+            itemIcon.Image = seedConfig.icon
+        else
+            itemIcon.Visible = false
+            warn("⚠️  No icon found for item:", itemData.itemId)
+        end
     end
-end
+    
+    if quantityLabel then
+        quantityLabel.Visible = true
+        quantityLabel.Text = tostring(itemData.quantity)
+    end
                 
                 if quantityLabel then
                     quantityLabel.Visible = true

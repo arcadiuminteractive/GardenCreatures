@@ -24,147 +24,102 @@ local Seeds = {
     seeds = {
         -- COMMON SEEDS
         {
-            id = "sunflower_seed",
-            name = "Sunflower Seed",
-            description = "A bright, cheerful seed that grows into a sunflower.",
+            id = "dust_pebble",
+            name = "Dust Pebble",
+            description = "A dusty pebble of earth",
             rarity = "Common",
-            plantType = "sunflower",
-            icon = "rbxassetid://125452722728732",
+            materialType = "dust",
+            specialProperty = "ass +1"
+            icon = "rbxassetid://95697693509834",
             modelId = "rbxassetid://123456789",
             stackSize = 99,
-            sellPrice = 5,
+            sellPrice = 1,
+            glowEffect = false
         },
-        
+
         {
-            id = "daisy_seed",
-            name = "Daisy Seed",
-            description = "A simple white flower seed.",
+            id = "clay_chunk",
+            name = "Clay Chunk",
+            description = "A chunk of clay",
             rarity = "Common",
-            plantType = "daisy",
-            icon = "rbxassetid://0",
+            materialType = "clay",
+            specialProperty = "ass +1"
+            icon = "rbxassetid://87706048713897",
+            modelId = "rbxassetid://123456789",
             stackSize = 99,
-            sellPrice = 5,
+            sellPrice = 1,
+            glowEffect = false
         },
-        
-        {
-            id = "grass_seed",
-            name = "Grass Seed",
-            description = "Basic grass that grows quickly.",
-            rarity = "Common",
-            plantType = "grass",
-            icon = "rbxassetid://2",
-            stackSize = 99,
-            sellPrice = 3,
-        },
-        
+
         -- UNCOMMON SEEDS
+
         {
-            id = "rose_seed",
-            name = "Rose Seed",
-            description = "A thorny but beautiful flower.",
-            rarity = "Uncommon",
-            plantType = "rose",
-            icon = "rbxassetid://0",
-            stackSize = 99,
-            sellPrice = 15,
+            id = "mud_heart",
+            name = "Mud Heart",
+            description = "A mysterious mud heart from unknown origin",
+            rarity = "UnCommon",
+            materialType = "mud",
+            specialProperty = "ass +2"
+            icon = "rbxassetid://75209915738251",
+            modelId = "rbxassetid://123456789",
+            stackSize = 50,
+            sellPrice = 5,
+            glowEffect = false
         },
-        
+
         {
-            id = "tulip_seed",
-            name = "Tulip Seed",
-            description = "A colorful spring flower.",
-            rarity = "Uncommon",
-            plantType = "tulip",
-            icon = "rbxassetid://0",
-            stackSize = 99,
-            sellPrice = 15,
+            id = "iron_shard",
+            name = "Iron Shard",
+            description = "An iron shard",
+            rarity = "UnCommon",
+            materialType = "mud",
+            specialProperty = "ass +2"
+            icon = "rbxassetid://110604248442404",
+            modelId = "rbxassetid://123456789",
+            stackSize = 50,
+            sellPrice = 5,
+            glowEffect = true
         },
-        
+
         -- RARE SEEDS
+
         {
-            id = "fire_lily_seed",
-            name = "Fire Lily Seed",
-            description = "A magical flower that glows with inner warmth.",
+            id = "earth_worm",
+            name = "Earth Worm",
+            description = "An earthy grub with an odd look to it",
             rarity = "Rare",
-            plantType = "fire_lily",
-            icon = "rbxassetid://0",
-            stackSize = 50,
-            sellPrice = 50,
-            specialProperty = "fire_element",
+            materialType = "worm",
+            specialProperty = "ass +5"
+            icon = "rbxassetid://109057061984432",
+            modelId = "rbxassetid://123456789",
+            stackSize = 20,
+            sellPrice = 10,
+            glowEffect = true
         },
-        
-        {
-            id = "water_lotus_seed",
-            name = "Water Lotus Seed",
-            description = "A mystical aquatic plant.",
-            rarity = "Rare",
-            plantType = "water_lotus",
-            icon = "rbxassetid://0",
-            stackSize = 50,
-            sellPrice = 50,
-            specialProperty = "water_element",
-        },
-        
-        -- EPIC SEEDS
-        {
-            id = "crystal_bloom_seed",
-            name = "Crystal Bloom Seed",
-            description = "A rare seed that grows crystalline flowers.",
-            rarity = "Epic",
-            plantType = "crystal_bloom",
-            icon = "rbxassetid://0",
-            stackSize = 25,
-            sellPrice = 150,
-            specialProperty = "crystal_growth",
-        },
-        
-        {
-            id = "shadow_vine_seed",
-            name = "Shadow Vine Seed",
-            description = "A mysterious dark plant with purple glow.",
-            rarity = "Epic",
-            plantType = "shadow_vine",
-            icon = "rbxassetid://0",
-            stackSize = 25,
-            sellPrice = 150,
-            specialProperty = "shadow_element",
-        },
-        
+
         -- LEGENDARY SEEDS
+
         {
-            id = "ancient_tree_seed",
-            name = "Ancient Tree Seed",
-            description = "The seed of a legendary tree said to live for millennia.",
+            id = "jewel_beetle",
+            name = "Jewel Beetle",
+            description = "A stunning Jewel like Beetle",
             rarity = "Legendary",
-            plantType = "ancient_tree",
-            icon = "rbxassetid://0",
-            stackSize = 10,
-            sellPrice = 500,
-            specialProperty = "ancient_power",
-            growthMultiplier = 2.0, -- Takes longer to grow
+            materialType = "beetle",
+            specialProperty = "ass +20"
+            icon = "rbxassetid://80832768025430",
+            modelId = "rbxassetid://123456789",
+            stackSize = 1,
+            sellPrice = 100,
+            glowEffect = true
         },
+
         
-        {
-            id = "starlight_seed",
-            name = "Starlight Seed",
-            description = "A cosmic seed that fell from the heavens.",
-            rarity = "Legendary",
-            plantType = "starlight_flower",
-            icon = "rbxassetid://0",
-            stackSize = 10,
-            sellPrice = 500,
-            specialProperty = "celestial_power",
-            glowEffect = true,
-        },
+        
     },
     
     -- Spawn locations for different seed types
     spawnZones = {
-        meadow = { "sunflower_seed", "daisy_seed", "grass_seed", "tulip_seed" },
-        forest = { "grass_seed", "rose_seed", "shadow_vine_seed" },
-        volcanic = { "fire_lily_seed", "crystal_bloom_seed" },
-        aquatic = { "water_lotus_seed", "tulip_seed" },
-        mystical = { "ancient_tree_seed", "starlight_seed", "crystal_bloom_seed" },
+        meadow = { "dust_pebble", "clay_chunk", "iron_shard", "earth_worm", "jewel_beetle" },
     }
 }
 
