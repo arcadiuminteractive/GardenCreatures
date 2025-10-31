@@ -171,6 +171,10 @@ function InventoryManager.CleanupPlayer(player: Player)
     end
 end
 
+-- Backwards compatibility with legacy naming
+InventoryManager.SetupInventory = InventoryManager.SetupPlayer
+InventoryManager.CleanupInventory = InventoryManager.CleanupPlayer
+
 -- ============================
 -- INVENTORY OPERATIONS
 -- ============================
