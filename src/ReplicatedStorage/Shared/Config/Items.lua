@@ -31,30 +31,25 @@ local _generatedSubstances = {}
 -- ================================
 Items.rarities = {
     Common = {
-        color = Color3.fromRGB(150, 150, 150),
+        color = Color3.fromRGB(100, 200, 100),
         weight = 50,
         multiplier = 1.0,
     },
     Uncommon = {
-        color = Color3.fromRGB(100, 200, 100),
+        color = Color3.fromRGB(100, 150, 255),
         weight = 30,
         multiplier = 1.5,
     },
     Rare = {
-        color = Color3.fromRGB(100, 150, 255),
+        color = Color3.fromRGB(128, 33, 117),
         weight = 15,
         multiplier = 2.0,
     },
-    Epic = {
-        color = Color3.fromRGB(200, 100, 255),
-        weight = 4,
-        multiplier = 3.0,
-    },
     Legendary = {
-        color = Color3.fromRGB(255, 200, 0),
+        color = Color3.fromRGB(224, 26, 26),
         weight = 1,
         multiplier = 5.0,
-    },
+    }
 }
 
 -- ================================
@@ -62,41 +57,85 @@ Items.rarities = {
 -- ================================
 Items.formTemplates = {
     {
-        id = "wolf_tooth",
-        name = "Wolf Tooth",
-        description = "An old decaying wolf's tooth",
-        category = "Form",
-        model = "rbxassetid://TODO_WOLF_FORM_ICON",
-        icon = "rbxassetid://96590138728105",
-        spawnZones = {"meadow"},
-        variants = {
-            Common = {size = 1.0, speed = 1.0},
-            Uncommon = {size = 1.1, speed = 1.1},
-            Rare = {size = 1.2, speed = 1.2},
-            Legendary = {size = 1.5, speed = 1.5},
+    id = "wolf_form",
+    name = "Wolf Jaw",
+    description = "An old jawbone from a wild wolf long passed",
+    itemType = "Form",
+    formType = "Wolf",
+    baseModel = "rbxassetid://1234567890", -- Creature model ID
+    baseSize = Vector3.new(2, 2, 2),
+    baseStats = {speed = 1.0, power = 1.0},
+    baseStackSize = 1,
+    basePrice = 50,
+    spawnZones = {"meadow"},
+    variants = {
+        Common = {
+            icon = "rbxassetid://96590138728105",
+            glowEffect = false,
+            particleEffect = nil,
+            specialProperty = nil,
         },
-    },
-}
+        UnCommon = {
+        icon = "rbxassetid://92170516959446",
+        glowEffect = true,
+        particleEffect = "rbxassetid://wolf_sparkle",
+        specialProperty = "Lunar Howl",
+        },
+        Rare = {
+            icon = "rbxassetid://104730292067575",
+            glowEffect = true,
+            particleEffect = "rbxassetid://wolf_sparkle",
+            specialProperty = "Lunar Howl",
+        },
+        Legendary = {
+            icon = "rbxassetid://139767131625010",
+            glowEffect = true,
+            particleEffect = "rbxassetid://legendary_aura",
+            specialProperty = "Alpha Resonance",
+        },
+        },
 
+    }
+}
 -- ================================
 -- SUBSTANCE TEMPLATES
 -- ================================
 Items.substanceTemplates = {
     {
-        id = "clay_chunk",
-        name = "Clay Chunk",
-        description = "A heavy chunk of clay-rich earth",
-        category = "Substance",
-        model = "rbxassetid://TODO_MUD_SUBSTANCE_MODEL",
-        icon = "rbxassetid://87706048713897",
-        spawnZones = {"meadow"},
-        variants = {
-            Common = {durability = 0.8},
-            Uncommon = {durability = 1.0},
-            Rare = {durability = 1.2},
-            Legendary = {durability = 1.8},
+    id = "clay_chunk",
+    name = "Clay Chunk",
+    description = "A heavy chunk of clay",
+    itemType = "Substance",
+    substanceType = "Clay",
+    material = Enum.Material.Glass,
+    baseColor = Color3.fromRGB(150, 200, 255),
+    texture = "rbxassetid://crystal_texture",
+    baseStatModifiers = {durability = 1.5, magic = 2.0},
+    baseStackSize = 10,
+    basePrice = 80,
+    spawnZones = {"meadow"},
+    variants = {
+        Common = {
+            icon = "rbxassetid://87706048713897",
+            glowEffect = false,
+            baseColor = Color3.fromRGB(180, 220, 255),
         },
-    },
+        Rare = {
+            icon = "rbxassetid://icon_rare_crystal",
+            glowEffect = true,
+            particleEffect = "rbxassetid://crystal_sparkle",
+            baseColor = Color3.fromRGB(200, 240, 255),
+        },
+        Legendary = {
+            icon = "rbxassetid://icon_legendary_crystal",
+            glowEffect = true,
+            particleEffect = "rbxassetid://legendary_crystal_aura",
+            baseColor = Color3.fromRGB(255, 255, 255),
+            specialProperty = "Radiant Core",
+        },
+    }
+}
+
 }
 
 -- ================================
