@@ -244,7 +244,7 @@ function DataManager.PlayerRemoving(player: Player)
         profile.Data.lastSave = os.time()
         profile:EndSession()
         Profiles[player] = nil
-        print("ðŸ’¾ Saved and released profile for:", player.Name)
+        print("▶ ✅ Saved and released profile for:", player.Name)
     end
 end
 
@@ -557,7 +557,7 @@ task.spawn(function()
             end
         end
         
-        print("ðŸ’¾ Auto-save completed")
+        print("▶ ✅ Auto-save completed")
     end
 end)
 
@@ -574,7 +574,7 @@ end)
 -- ============================
 
 game:BindToClose(function()
-    print("ðŸ›‘ Server shutting down - saving all data...")
+    print("💾 Server shutting down - saving all data...")
     
     for player, profile in pairs(Profiles) do
         if profile then
