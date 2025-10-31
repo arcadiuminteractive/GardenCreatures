@@ -91,7 +91,12 @@ function ItemSpawnController.Init()
         ItemSpawnController._UnregisterZone(zone)
     end)
     
-    print("✅ Item Spawn System initialized with", #SpawnZones, "zones")
+    local zoneCount = 0
+    for _ in pairs(SpawnZones) do
+        zoneCount = zoneCount + 1
+    end
+
+    print("✅ Item Spawn System initialized with", zoneCount, "zones")
 end
 
 function ItemSpawnController.Start()

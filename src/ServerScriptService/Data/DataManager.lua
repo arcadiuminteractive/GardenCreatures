@@ -248,6 +248,39 @@ function DataManager.PlayerRemoving(player: Player)
     end
 end
 
+-- Compatibility helpers for legacy server code -----------------------------
+
+function DataManager.LoadPlayerData(player: Player): boolean
+    local success, result = pcall(DataManager.InitializePlayer, player)
+    if not success then
+        warn("❌ Failed to load player data:", player and player.Name or "<unknown>", result)
+        return false
+    end
+
+    return result == true
+end
+
+function DataManager.UnloadPlayerData(player: Player): boolean
+    local success, result = pcall(DataManager.PlayerRemoving, player)
+    if not success then
+        warn("⚠️ Failed to unload player data:", player and player.Name or "<unknown>", result)
+        return false
+    end
+
+    return true
+end
+
+function DataManager.SaveAllData(): boolean
+    local hadProfiles = false
+
+    for player, _ in pairs(Profiles) do
+        hadProfiles = true
+        DataManager.SavePlayer(player)
+    end
+
+    return hadProfiles
+end
+
 -- ============================
 -- CURRENCY METHODS
 -- ============================
