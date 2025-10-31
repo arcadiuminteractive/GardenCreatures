@@ -381,7 +381,7 @@ local Creatures = {
                 {
                     id = "lucky_find_3",
                     name = "Cosmic Luck",
-                    description = "High chance for legendary seeds",
+                    description = "High chance for legendary items",
                     tier = 3,
                     category = "Gathering",
                     effectType = "legendary_drop_boost",
