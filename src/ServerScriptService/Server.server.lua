@@ -1,48 +1,54 @@
 --[[
-    Server.server.lua - FIXED VERSION
-    Main server entry point for Garden Creatures
+    Server.server.lua - REFACTORED FOR PROPER INITIALIZATION
+    Main server initialization script
     
-    ✅ FIXES APPLIED:
-    1. Creates RemoteEvents folder BEFORE any systems load
-    2. Pre-creates commonly used RemoteEvents to prevent race conditions
-    3. Ensures clients can access RemoteEvents immediately
-    
-    Place this file in: ServerScriptService/Server.server.lua
-    
-    Initializes all server systems and manages game state
+    ✅ BEST PRACTICES IMPLEMENTED:
+    1. Initialize shared configs on server first
+    2. Load dependencies in correct order
+    3. Single initialization point
+    4. Clear startup logging
+    5. Proper error handling
 ]]
 
-print("🌱 Garden Creatures - Server Starting...")
-
--- Get services
-local ServerScriptService = game:GetService("ServerScriptService")
+-- ============================
+-- SERVICES
+-- ============================
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local AdminCommands = require(ServerScriptService.AdminCommands)
-   AdminCommands.Init()
+local ServerScriptService = game:GetService("ServerScriptService")
+local ServerStorage = game:GetService("ServerStorage")
 
--- Wait for critical folders
-local Systems = ServerScriptService:WaitForChild("Systems")
-local Data = ServerScriptService:WaitForChild("Data")
+-- ============================
+-- STARTUP
+-- ============================
+print("🌱 Garden Creatures - Server Starting...")
+
+-- ============================
+-- SHARED CONFIGURATION INITIALIZATION
+-- ============================
+-- Initialize Items config ONCE on server startup
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ItemsConfig = require(Shared.Config.Items)
 
--- Load configuration
-local Config = {
-    Items = require(Shared.Config.Items),         -- ✨ RENAMED from Seeds
-    CreaturePlots = require(Shared.Config.CreaturePlots),  -- ✨ NEW
-    Plants = require(Shared.Config.Plants),
-    Recipes = require(Shared.Config.Recipes),
-    Creatures = require(Shared.Config.Creatures),
-    Economy = require(Shared.Config.Economy),
-    WildSpawns = require(Shared.Config.WildSpawns),
-}
+-- This is the ONLY place Items.Initialize() should be called
+ItemsConfig.Initialize()
 
 -- ============================
--- ✅ FIX: CREATE REMOTE EVENTS FOLDER IMMEDIATELY
--- This prevents client race conditions where they try to access
--- RemoteEvents before the server creates it
+-- LOAD MANAGERS & SYSTEMS
 -- ============================
 
+-- Data Management
+local DataManager = require(ServerScriptService.Data.DataManager)
+print("✅ DataManager loaded successfully!")
+print("✅ Inventory is managed separately by InventoryManager")
+
+-- Admin Commands
+local AdminCommands = require(ServerScriptService.AdminCommands)
+print("✅ Admin Commands loaded")
+
+-- ============================
+-- REMOTE EVENTS SETUP
+-- ============================
 local RemoteEvents = ReplicatedStorage:FindFirstChild("RemoteEvents")
 if not RemoteEvents then
     RemoteEvents = Instance.new("Folder")
@@ -51,123 +57,98 @@ if not RemoteEvents then
     print("📡 Created RemoteEvents folder")
 end
 
--- Helper function to create RemoteEvents
-local function CreateRemoteEvent(name: string): RemoteEvent
-    local existing = RemoteEvents:FindFirstChild(name)
-    if existing and existing:IsA("RemoteEvent") then
-        return existing
-    end
-    
-    local remoteEvent = Instance.new("RemoteEvent")
-    remoteEvent.Name = name
-    remoteEvent.Parent = RemoteEvents
-    return remoteEvent
-end
+-- Define all remote events (one-way communication)
+local remoteEventNames = {
+    -- Inventory
+    "UpdateInventory",
+    -- NOTE: RequestInventory is a RemoteFunction (created separately below)
+    -- Item Collection
+    "CollectItem",
+    "ItemCollected",
+    -- Creature Plots
+    "PlacePlotItem",
+    "RemovePlotItem",
+    "ConfirmCreature",
+    "CreaturePlotUpdated",
+    -- Gardening
+    "PlantSeed",
+    "HarvestPlant",
+    "WaterPlant",
+    -- Crafting
+    "CraftRecipe",
+    -- Trading
+    "SendTradeRequest",
+    "AcceptTrade",
+}
 
--- Helper function to create RemoteFunctions
-local function CreateRemoteFunction(name: string): RemoteFunction
-    local existing = RemoteEvents:FindFirstChild(name)
-    if existing and existing:IsA("RemoteFunction") then
-        return existing
-    end
-    
-    local remoteFunction = Instance.new("RemoteFunction")
-    remoteFunction.Name = name
-    remoteFunction.Parent = RemoteEvents
-    return remoteFunction
-end
-
--- ✅ Pre-create commonly used RemoteEvents to prevent infinite yield warnings
 print("📡 Creating RemoteEvents...")
+for _, eventName in ipairs(remoteEventNames) do
+    if not RemoteEvents:FindFirstChild(eventName) then
+        local remoteEvent = Instance.new("RemoteEvent")
+        remoteEvent.Name = eventName
+        remoteEvent.Parent = RemoteEvents
+    end
+end
 
--- Seed Collection System
-CreateRemoteEvent("CollectItems")
+-- Create RemoteFunctions separately (don't include in RemoteEvents list above)
+local RequestInventoryFunc = RemoteEvents:FindFirstChild("RequestInventory")
+if not RequestInventoryFunc or not RequestInventoryFunc:IsA("RemoteFunction") then
+    -- Remove old RemoteEvent if it exists
+    if RequestInventoryFunc then
+        RequestInventoryFunc:Destroy()
+    end
+    RequestInventoryFunc = Instance.new("RemoteFunction")
+    RequestInventoryFunc.Name = "RequestInventory"
+    RequestInventoryFunc.Parent = RemoteEvents
+end
 
--- Plant System
-CreateRemoteEvent("PlantItem")
-CreateRemoteEvent("HarvestPlant")
-CreateRemoteEvent("WaterPlant")
-
--- Creature System
-CreateRemoteEvent("CraftCreature")
-CreateRemoteEvent("TameCreature")
-CreateRemoteEvent("SetActiveCreatures")
-CreateRemoteEvent("UseAbility")
-
--- Economy System
-CreateRemoteEvent("PurchaseItem")
-CreateRemoteEvent("SellItem")
-
--- Trading System
-CreateRemoteEvent("SendTradeRequest")
-CreateRemoteEvent("AcceptTrade")
-CreateRemoteEvent("DeclineTrade")
-
--- UI Updates (Server -> Client)
-CreateRemoteEvent("UpdateInventoryUI")
-CreateRemoteEvent("UpdateCurrencyUI")
-CreateRemoteEvent("ShowNotification")
-
-print("✅ RemoteEvents initialized with", #RemoteEvents:GetChildren(), "events")
+print("✅ RemoteEvents initialized with " .. #remoteEventNames .. " events")
+print("✅ RemoteFunctions initialized (RequestInventory)")
 
 -- ============================
--- LOAD DATAMANAGER (CRITICAL!)
+-- LOAD GAME SYSTEMS
 -- ============================
-
-local DataManager = require(Data.DataManager)
 print("✅ DataManager loaded")
 
--- Initialize other systems
-local LoadedSystems = {
-    DataManager = DataManager,
+-- Load game systems
+local systems = {}
+local systemModules = {
+    InventoryManager = ServerScriptService.Systems.InventorySystem.InventoryManager,
+    CreaturePlotManager = ServerScriptService.Systems.CreaturePlotSystem.CreaturePlotManager,
+    ItemSpawnController = ServerScriptService.Systems.ItemSpawnSystem.ItemSpawnController,
+    -- Add more systems here as they're created
+    -- GardeningSystem = ServerScriptService.Systems.GardeningSystem.GardeningManager,
+    -- CraftingSystem = ServerScriptService.Systems.CraftingSystem.CraftingManager,
 }
 
--- Systems to load (in order)
-local SystemsToLoad = {
-    -- Core system (special case - loaded differently)
-    -- DataManager is loaded separately above
-    
-    -- Gameplay systems
-    { folder = "InventorySystem", module = "InventoryManager" },
-    { folder = "CreaturePlotSystem", module = "CreaturePlotManager" },  -- ✨ NEW
-    { folder = "ItemSpawnSystem", module = "ItemSpawnController" },      -- ✨ RENAMED
-    
-    -- Uncomment these as you implement them:
-    -- { folder = "EconomySystem", module = "CurrencyManager" },
-    -- { folder = "GardeningSystem", module = "PlantManager" },
-    -- { folder = "CraftingSystem", module = "RecipeManager" },
-    -- { folder = "CreatureSystem", module = "CreatureManager" },
-    -- { folder = "TradingSystem", module = "TradeManager" },
-    -- { folder = "HomeBaseSystem", module = "HomeBaseManager" },
-    -- { folder = "CreatureSystem", module = "WildSpawnController" },
-}
-
--- Load systems
-for _, systemInfo in ipairs(SystemsToLoad) do
-    local success, result = pcall(function()
-        local folder = Systems:FindFirstChild(systemInfo.folder)
-        if folder then
-            local module = folder:FindFirstChild(systemInfo.module)
-            if module then
-                return require(module)
-            end
-        end
-        return nil
-    end)
-    
-    if success and result then
-        LoadedSystems[systemInfo.module] = result
-        print("✅ Loaded system:", systemInfo.module)
-        
-        -- Initialize if Init method exists
-        if result.Init then
-            local initSuccess, initError = pcall(result.Init)
-            if not initSuccess then
-                warn("❌ Failed to initialize:", systemInfo.module, initError)
-            end
-        end
+-- Load all systems
+for name, module in pairs(systemModules) do
+    local success, system = pcall(require, module)
+    if success then
+        systems[name] = system
+        print("✅ Loaded system:", name)
     else
-        warn("⚠️  System not found or failed to load:", systemInfo.folder .. "/" .. systemInfo.module)
+        warn("❌ Failed to load system:", name, system)
+    end
+end
+
+-- Initialize systems in dependency order
+for name, system in pairs(systems) do
+    if system.Init then
+        local success, err = pcall(system.Init)
+        if not success then
+            warn("❌ Failed to initialize system:", name, err)
+        end
+    end
+end
+
+-- Start systems
+for name, system in pairs(systems) do
+    if system.Start then
+        local success, err = pcall(system.Start)
+        if not success then
+            warn("❌ Failed to start system:", name, err)
+        end
     end
 end
 
@@ -178,141 +159,79 @@ end
 Players.PlayerAdded:Connect(function(player)
     print("👤 Player joined:", player.Name)
     
-    -- Initialize player data (critical!)
-    local success = DataManager.InitializePlayer(player)
+    -- Admin check
+    AdminCommands.OnPlayerJoined(player)
     
-    if success then
-        -- Setup other systems after data loads
-        for systemName, system in pairs(LoadedSystems) do
-            if system.SetupPlayer then
-                local setupSuccess, setupError = pcall(function()
-                    system.SetupPlayer(player)
-                end)
-                
-                if not setupSuccess then
-                    warn("❌ Failed to setup player for system:", systemName, setupError)
-                end
-            end
-        end
-        
-        -- Welcome message
-        task.wait(2)
-        print("🌱 Welcome to Garden Creatures,", player.Name .. "!")
-        
-        -- TODO: Fire RemoteEvent to show welcome UI
-        -- local ShowNotification = RemoteEvents:FindFirstChild("ShowNotification")
-        -- if ShowNotification then
-        --     ShowNotification:FireClient(player, {
-        --         title = "Welcome!",
-        --         message = "Start collecting seeds to grow your garden!",
-        --         duration = 5
-        --     })
-        -- end
-    else
-        warn("❌ Failed to initialize player data for:", player.Name)
+    -- Wait for character
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    
+    -- Load player data
+    DataManager.LoadPlayerData(player)
+    
+    -- Setup inventory
+    if systems.InventoryManager then
+        systems.InventoryManager.SetupInventory(player)
     end
+    
+    -- Setup creature plots
+    if systems.CreaturePlotManager then
+        systems.CreaturePlotManager.SetupPlayerPlots(player)
+    end
+    
+    -- Welcome message
+    task.wait(2)
+    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
 end)
 
 Players.PlayerRemoving:Connect(function(player)
     print("👋 Player leaving:", player.Name)
     
-    -- Save player data
-    DataManager.SavePlayer(player)
-    
-    -- Cleanup other systems
-    for systemName, system in pairs(LoadedSystems) do
-        if system.CleanupPlayer then
-            pcall(function()
-                system.CleanupPlayer(player)
-            end)
-        end
+    -- Cleanup inventory (with safety check)
+    if systems.InventoryManager and systems.InventoryManager.CleanupInventory then
+        systems.InventoryManager.CleanupInventory(player)
     end
+    
+    -- Cleanup creature plots (with safety check)
+    if systems.CreaturePlotManager and systems.CreaturePlotManager.CleanupPlayerPlots then
+        systems.CreaturePlotManager.CleanupPlayerPlots(player)
+    end
+    
+    -- Save and release player data
+    DataManager.UnloadPlayerData(player)
 end)
 
 -- ============================
--- GAME SHUTDOWN
+-- SHUTDOWN HANDLING
 -- ============================
 
 game:BindToClose(function()
     print("🛑 Server shutting down...")
     
-    -- Save all player data
-    for _, player in ipairs(Players:GetPlayers()) do
-        DataManager.SavePlayer(player)
+    -- Save all data
+    DataManager.SaveAllData()
+    
+    -- Cleanup all systems
+    if systems.InventoryManager and systems.InventoryManager.SaveAllInventories then
+        systems.InventoryManager.SaveAllInventories()
     end
     
-    -- Wait for ProfileService to finish
+    -- Wait for saves to complete
     task.wait(3)
-    
     print("💾 All data saved. Goodbye!")
 end)
 
 -- ============================
--- START BACKGROUND SYSTEMS
+-- SERVER READY
 -- ============================
 
--- Start systems that run continuously
-for systemName, system in pairs(LoadedSystems) do
-    if system.Start then
-        task.spawn(function()
-            local success, err = pcall(system.Start)
-            if not success then
-                warn("❌ System start failed:", systemName, err)
-            end
-        end)
-    end
+-- Count loaded systems
+local systemCount = 0
+for _ in pairs(systems) do
+    systemCount = systemCount + 1
 end
-
--- ============================
--- DEBUGGING ACCESS
--- ============================
-
--- Make systems accessible globally for debugging
-_G.GardenCreatures = {
-    Systems = LoadedSystems,
-    Config = Config,
-    Version = "0.1.0",
-    RemoteEvents = RemoteEvents,
-}
-
--- Debug commands
-_G.GC_AddCoins = function(player, amount)
-    return DataManager.AddCurrency(player, "Coins", amount)
-end
-
-_G.GC_AddGems = function(player, amount)
-    return DataManager.AddCurrency(player, "Gems", amount)
-end
-
-_G.GC_GetData = function(player)
-    return DataManager.GetData(player)
-end
-
--- Updated for new item system
-_G.GC_AddItem = function(player, itemId, amount)
-    local Items = require(game.ReplicatedStorage.Shared.Config.Items)
-    local item = Items.GetItemById(itemId)
-    
-    if not item then
-        warn("❌ Item not found:", itemId)
-        return false
-    end
-    
-    local InventoryManager = require(game.ServerScriptService.Systems.InventorySystem.InventoryManager)
-    return InventoryManager.AddItem(player, itemId, item.name, amount or 1)
-end
-
--- Backward compatibility (deprecated)
-_G.GC_AddSeed = function(player, seedId, amount)
-    warn("⚠️ GC_AddSeed is deprecated, use GC_AddItem instead")
-    return _G.GC_AddItem(player, seedId, amount)
-end
-
--- ============================
--- STARTUP COMPLETE
--- ============================
 
 print("✅ Garden Creatures - Server Started Successfully!")
 print("🌱 Version: 0.1.0 Alpha")
-print("📊 Systems Loaded:", #SystemsToLoad + 1) -- +1 for DataManager
+print("📊 Systems Loaded:", systemCount)
 print("🎮 Ready for players!")
