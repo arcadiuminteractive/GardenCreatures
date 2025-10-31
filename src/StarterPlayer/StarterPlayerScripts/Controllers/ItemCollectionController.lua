@@ -1,16 +1,17 @@
 --[[
-    ItemCollectionController.lua - REFACTORED FOR NEW ITEM SYSTEM
+    ItemCollectionController.lua - REFACTORED WITH FIX FOR NEW ITEM SYSTEM
     Client-side controller for item collection mechanics
     
-    âœ… CHANGES FROM SeedCollectionController:
-    1. Works with new Items.lua config
-    2. Updated naming (seeds -> items)
-    3. Supports different item types (Form, Substance, Attribute)
-    4. Maintains all existing visual feedback
+    ✅ FIXES APPLIED:
+    1. Validation check to prevent premature "Item Collected" notification on join
+    2. Proximity notification now shows actual item icon from Items.lua config
+    3. Border color dynamically matches item rarity
+    4. Smooth fade-in animation for proximity notification
+    5. Unified notification system that transforms from proximity to collected state
     
     Features:
     - Click-to-collect interface
-    - Collection visual feedback with item icons
+    - Collection visual feedback with actual item icons
     - Item highlighting with rarity-based borders
     - Collection notifications with rarity indicators
     - Distance validation
@@ -29,16 +30,18 @@ local UserInputService = game:GetService("UserInputService")
 local ITEM_TAG = "ItemSpawn"
 local COLLECTION_RANGE = 15
 local HIGHLIGHT_RANGE = 20
+local PROXIMITY_CHECK_INTERVAL = 0.1 -- 10 Hz for smooth detection
 
--- Rarity Colors
+-- Rarity Colors (matching Items.lua config)
 local RARITY_COLORS = {
-    common = Color3.fromRGB(100, 200, 100),
-    uncommon = Color3.fromRGB(100, 100, 255),
-    rare = Color3.fromRGB(200, 100, 255),
-    legendary = Color3.fromRGB(255, 50, 50)
+    common = Color3.fromRGB(100, 200, 100),      -- Green
+    uncommon = Color3.fromRGB(100, 100, 255),    -- Blue
+    rare = Color3.fromRGB(200, 100, 255),        -- Purple
+    epic = Color3.fromRGB(255, 165, 0),          -- Orange
+    legendary = Color3.fromRGB(255, 50, 50)      -- Red
 }
 
--- State
+-- State Management
 local player = Players.LocalPlayer
 local character = nil
 local humanoidRootPart = nil
@@ -46,13 +49,19 @@ local mouse = player:GetMouse()
 local nearbyItems = {}
 local highlightedItem = nil
 local isCollecting = false
+local isNotificationShowing = false
+local isTransitioning = false
+local currentItemData = nil
 
 -- RemoteEvents
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CollectItemEvent = RemoteEvents:WaitForChild("CollectItem")
 local ItemCollectedEvent = RemoteEvents:WaitForChild("ItemCollected")
 
--- UI
+-- Config
+local Items = require(ReplicatedStorage.Shared.Config.Items)
+
+-- UI References
 local playerGui = player:WaitForChild("PlayerGui")
 local itemPrompt = nil
 local notificationGui = nil
@@ -63,28 +72,32 @@ local promptBorder = nil
 -- ============================
 
 function ItemCollectionController.Init()
-    print("ðŸŒ± Initializing Item Collection Controller...")
+    print("🌱 Initializing Item Collection Controller...")
     
     ItemCollectionController._SetupCharacter()
     ItemCollectionController._SetupItemTracking()
     ItemCollectionController._CreateUI()
     ItemCollectionController._SetupInput()
     
+    -- ✅ FIX 1: Added validation to prevent premature notifications
     ItemCollectedEvent.OnClientEvent:Connect(function(itemInfo)
-        ItemCollectionController._OnItemCollected(itemInfo)
+        -- Only fire if we have valid item data from the server
+        if itemInfo and itemInfo.itemId then
+            ItemCollectionController._OnItemCollected(itemInfo)
+        end
     end)
     
-    print("âœ… Item Collection Controller initialized")
+    print("✅ Item Collection Controller initialized")
 end
 
 function ItemCollectionController.Start()
-    print("ðŸŒ± Starting Item Collection Controller...")
+    print("🌱 Starting Item Collection Controller...")
     
     task.spawn(function()
         ItemCollectionController._ProximityLoop()
     end)
     
-    print("âœ… Item Collection Controller started")
+    print("✅ Item Collection Controller started")
 end
 
 -- ============================
@@ -109,14 +122,17 @@ end
 -- ============================
 
 function ItemCollectionController._SetupItemTracking()
+    -- Track existing items
     for _, item in ipairs(CollectionService:GetTagged(ITEM_TAG)) do
         ItemCollectionController._OnItemAdded(item)
     end
     
+    -- Track new items
     CollectionService:GetInstanceAddedSignal(ITEM_TAG):Connect(function(item)
         ItemCollectionController._OnItemAdded(item)
     end)
     
+    -- Track removed items
     CollectionService:GetInstanceRemovedSignal(ITEM_TAG):Connect(function(item)
         ItemCollectionController._OnItemRemoved(item)
     end)
@@ -131,252 +147,19 @@ function ItemCollectionController._OnItemRemoved(item: Instance)
     
     if highlightedItem == item then
         highlightedItem = nil
+        currentItemData = nil
         ItemCollectionController._HidePrompt()
     end
 end
 
 -- ============================
--- PROXIMITY DETECTION
+-- CONFIG LOOKUP FUNCTIONS
 -- ============================
 
-function ItemCollectionController._ProximityLoop()
-    while true do
-        task.wait(0.1)
-        
-        if not humanoidRootPart then
-            task.wait(1)
-            continue
-        end
-        
-        local currentNearby = {}
-        local closestItem = nil
-        local closestDistance = math.huge
-        
-        for _, item in ipairs(CollectionService:GetTagged(ITEM_TAG)) do
-            if item and item.Parent then
-                local itemPart = item:FindFirstChild("ItemPart")
-                
-                if itemPart then
-                    local distance = (humanoidRootPart.Position - itemPart.Position).Magnitude
-                    
-                    if distance <= HIGHLIGHT_RANGE then
-                        currentNearby[item] = true
-                        
-                        if distance < closestDistance and distance <= COLLECTION_RANGE then
-                            closestDistance = distance
-                            closestItem = item
-                        end
-                    end
-                end
-            end
-        end
-        
-        nearbyItems = currentNearby
-        
-        if closestItem ~= highlightedItem then
-            highlightedItem = closestItem
-            
-            if highlightedItem then
-                ItemCollectionController._ShowPrompt(highlightedItem)
-            else
-                ItemCollectionController._HidePrompt()
-            end
-        end
-    end
-end
-
--- ============================
--- UI MANAGEMENT
--- ============================
-
-function ItemCollectionController._CreateUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "ItemCollectionUI"
-    screenGui.ResetOnSpawn = false
-    screenGui.Parent = playerGui
-    
-    local prompt = Instance.new("Frame")
-    prompt.Name = "CollectionPrompt"
-    prompt.Size = UDim2.new(0, 200, 0, 60)
-    prompt.Position = UDim2.new(0.5, 0, 0.8, 0)
-    prompt.AnchorPoint = Vector2.new(0.5, 0.5)
-    prompt.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    prompt.BackgroundTransparency = 0.2
-    prompt.BorderSizePixel = 0
-    prompt.Visible = false
-    prompt.Parent = screenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = prompt
-    
-    local border = Instance.new("UIStroke")
-    border.Name = "RarityBorder"
-    border.Thickness = 3
-    border.Color = Color3.fromRGB(100, 255, 100)
-    border.Transparency = 0
-    border.Parent = prompt
-    promptBorder = border
-    
-    task.spawn(function()
-        while true do
-            if prompt.Visible then
-                local pulseIn = TweenService:Create(border, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                    Thickness = 5
-                })
-                pulseIn:Play()
-                pulseIn.Completed:Wait()
-                
-                local pulseOut = TweenService:Create(border, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-                    Thickness = 3
-                })
-                pulseOut:Play()
-                pulseOut.Completed:Wait()
-            else
-                task.wait(0.5)
-            end
-        end
-    end)
-    
-    local icon = Instance.new("TextLabel")
-    icon.Name = "Icon"
-    icon.Size = UDim2.new(0, 40, 0, 40)
-    icon.Position = UDim2.new(0, 10, 0.5, 0)
-    icon.AnchorPoint = Vector2.new(0, 0.5)
-    icon.BackgroundTransparency = 1
-    icon.Text = "ðŸ“¦"
-    icon.TextScaled = true
-    icon.Parent = prompt
-    
-    local label = Instance.new("TextLabel")
-    label.Name = "Label"
-    label.Size = UDim2.new(1, -60, 1, 0)
-    label.Position = UDim2.new(0, 50, 0, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.Font = Enum.Font.SourceSansBold
-    label.TextSize = 18
-    label.Text = "Click to collect!"
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = prompt
-    
-    itemPrompt = prompt
-    
-    ItemCollectionController._CreateNotificationUI(screenGui)
-end
-
-function ItemCollectionController._CreateNotificationUI(screenGui: ScreenGui)
-    local notifFrame = Instance.new("Frame")
-    notifFrame.Name = "NotificationFrame"
-    notifFrame.Size = UDim2.new(0, 300, 0, 80)
-    notifFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
-    notifFrame.AnchorPoint = Vector2.new(0.5, 0)
-    notifFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    notifFrame.BackgroundTransparency = 1
-    notifFrame.BorderSizePixel = 0
-    notifFrame.Parent = screenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = notifFrame
-    
-    local iconFrame = Instance.new("Frame")
-    iconFrame.Name = "IconFrame"
-    iconFrame.Size = UDim2.new(0, 50, 0, 50)
-    iconFrame.Position = UDim2.new(0, 15, 0.5, 0)
-    iconFrame.AnchorPoint = Vector2.new(0, 0.5)
-    iconFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-    iconFrame.BorderSizePixel = 0
-    iconFrame.Parent = notifFrame
-    
-    local iconCorner = Instance.new("UICorner")
-    iconCorner.CornerRadius = UDim.new(0, 8)
-    iconCorner.Parent = iconFrame
-    
-    local icon = Instance.new("ImageLabel")
-    icon.Name = "Icon"
-    icon.Size = UDim2.new(0.8, 0, 0.8, 0)
-    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
-    icon.AnchorPoint = Vector2.new(0.5, 0.5)
-    icon.BackgroundTransparency = 1
-    icon.Image = ""
-    icon.ScaleType = Enum.ScaleType.Fit
-    icon.Parent = iconFrame
-    
-    local emojiIcon = Instance.new("TextLabel")
-    emojiIcon.Name = "EmojiIcon"
-    emojiIcon.Size = UDim2.new(1, 0, 1, 0)
-    emojiIcon.BackgroundTransparency = 1
-    emojiIcon.Text = "âœ…"
-    emojiIcon.TextScaled = true
-    emojiIcon.Visible = false
-    emojiIcon.Parent = iconFrame
-    
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Name = "Title"
-    titleLabel.Size = UDim2.new(1, -80, 0, 25)
-    titleLabel.Position = UDim2.new(0, 70, 0, 10)
-    titleLabel.BackgroundTransparency = 1
-    titleLabel.TextColor3 = Color3.new(1, 1, 1)
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.TextSize = 20
-    titleLabel.Text = "Item Collected!"
-    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    titleLabel.Parent = notifFrame
-    
-    local detailLabel = Instance.new("TextLabel")
-    detailLabel.Name = "Detail"
-    detailLabel.Size = UDim2.new(1, -80, 0, 20)
-    detailLabel.Position = UDim2.new(0, 70, 0, 35)
-    detailLabel.BackgroundTransparency = 1
-    detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    detailLabel.Font = Enum.Font.SourceSans
-    detailLabel.TextSize = 16
-    detailLabel.Text = "Common Item"
-    detailLabel.TextXAlignment = Enum.TextXAlignment.Left
-    detailLabel.Parent = notifFrame
-    
-    local rarityLabel = Instance.new("TextLabel")
-    rarityLabel.Name = "Rarity"
-    rarityLabel.Size = UDim2.new(1, -80, 0, 18)
-    rarityLabel.Position = UDim2.new(0, 70, 0, 55)
-    rarityLabel.BackgroundTransparency = 1
-    rarityLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    rarityLabel.Font = Enum.Font.SourceSansBold
-    rarityLabel.TextSize = 14
-    rarityLabel.Text = "COMMON"
-    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
-    rarityLabel.Parent = notifFrame
-    
-    notificationGui = notifFrame
-end
-
-function ItemCollectionController._ShowPrompt(itemModel: Instance)
-    if not itemPrompt then return end
-    
-    -- Get item name from attribute or fall back to model name
-    local itemName = itemModel:GetAttribute("itemName") or itemModel.Name
-    
-    local label = itemPrompt:FindFirstChild("Label")
-    if label then
-        -- Clean up the display name
-        local displayName = itemName:gsub("_", " ")
-        label.Text = "Collect " .. displayName
-    end
-    
-    -- Get rarity and update border color
-    local rarity = ItemCollectionController._GetItemRarity(itemModel)
-    if promptBorder and RARITY_COLORS[rarity] then
-        promptBorder.Color = RARITY_COLORS[rarity]
-    end
-    
-    itemPrompt.Visible = true
-end
-
-function ItemCollectionController._HidePrompt()
-    if itemPrompt then
-        itemPrompt.Visible = false
-    end
+-- ✅ FIX 2: Added function to get item config from Items.lua
+function ItemCollectionController._GetItemConfig(itemId: string)
+    if not itemId then return nil end
+    return Items.GetItemById(itemId)
 end
 
 function ItemCollectionController._GetItemRarity(itemModel: Instance): string
@@ -399,78 +182,344 @@ function ItemCollectionController._GetItemRarity(itemModel: Instance): string
     return "common"
 end
 
-function ItemCollectionController._ShowNotification(itemInfo: any)
-    if not notificationGui then return end
-    
-    local titleLabel = notificationGui:FindFirstChild("Title")
-    local detailLabel = notificationGui:FindFirstChild("Detail")
-    local rarityLabel = notificationGui:FindFirstChild("Rarity")
-    local iconFrame = notificationGui:FindFirstChild("IconFrame")
-    
-    if titleLabel then
-        titleLabel.Text = "Item Collected!"
+-- ============================
+-- PROXIMITY DETECTION
+-- ============================
+
+function ItemCollectionController._ProximityLoop()
+    while true do
+        task.wait(PROXIMITY_CHECK_INTERVAL)
+        
+        if not humanoidRootPart then
+            task.wait(1)
+            continue
+        end
+        
+        local currentNearby = {}
+        local closestItem = nil
+        local closestDistance = math.huge
+        
+        -- Find all nearby items
+        for _, item in ipairs(CollectionService:GetTagged(ITEM_TAG)) do
+            if item and item.Parent then
+                local itemPart = item:FindFirstChild("ItemPart")
+                
+                if itemPart then
+                    local distance = (humanoidRootPart.Position - itemPart.Position).Magnitude
+                    
+                    if distance <= HIGHLIGHT_RANGE then
+                        currentNearby[item] = true
+                        
+                        if distance < closestDistance and distance <= COLLECTION_RANGE then
+                            closestDistance = distance
+                            closestItem = item
+                        end
+                    end
+                end
+            end
+        end
+        
+        nearbyItems = currentNearby
+        
+        -- Update highlighted item
+        if closestItem ~= highlightedItem then
+            highlightedItem = closestItem
+            
+            if highlightedItem then
+                -- ✅ Store current item data for quick access
+                local itemId = highlightedItem:GetAttribute("itemId")
+                currentItemData = ItemCollectionController._GetItemConfig(itemId)
+                ItemCollectionController._ShowPrompt(highlightedItem)
+            else
+                currentItemData = nil
+                ItemCollectionController._HidePrompt()
+            end
+        end
     end
+end
+
+-- ============================
+-- UI MANAGEMENT
+-- ============================
+
+function ItemCollectionController._CreateUI()
+    -- Create main screen GUI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "ItemCollectionUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
     
-    local itemName = itemInfo.itemName or "Item"
-    local rarity = itemInfo.rarity or "common"
+    -- ==================
+    -- PROXIMITY PROMPT (UNIFIED NOTIFICATION)
+    -- ==================
+    local prompt = Instance.new("Frame")
+    prompt.Name = "CollectionPrompt"
+    prompt.Size = UDim2.new(0, 300, 0, 85)
+    prompt.Position = UDim2.new(0.5, 0, 0.15, 0)
+    prompt.AnchorPoint = Vector2.new(0.5, 0.5)
+    prompt.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    prompt.BackgroundTransparency = 0.1
+    prompt.BorderSizePixel = 0
+    prompt.Visible = false
+    prompt.Parent = screenGui
+    
+    -- Corner rounding
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = prompt
+    
+    -- ✅ FIX 3: Rarity-based border that pulses
+    local border = Instance.new("UIStroke")
+    border.Name = "RarityBorder"
+    border.Color = Color3.fromRGB(100, 200, 100) -- Default green
+    border.Thickness = 3
+    border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    border.Parent = prompt
+    promptBorder = border
+    
+    -- Border pulse animation
+    local function createBorderPulse()
+        local pulseIn = TweenService:Create(
+            border,
+            TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+            { Thickness = 5 }
+        )
+        pulseIn:Play()
+    end
+    createBorderPulse()
+    
+    -- ✅ FIX 2: Icon frame with rarity color background
+    local iconFrame = Instance.new("Frame")
+    iconFrame.Name = "IconFrame"
+    iconFrame.Size = UDim2.new(0, 60, 0, 60)
+    iconFrame.Position = UDim2.new(0, 10, 0.5, 0)
+    iconFrame.AnchorPoint = Vector2.new(0, 0.5)
+    iconFrame.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    iconFrame.BorderSizePixel = 0
+    iconFrame.Parent = prompt
+    
+    local iconCorner = Instance.new("UICorner")
+    iconCorner.CornerRadius = UDim.new(0, 6)
+    iconCorner.Parent = iconFrame
+    
+    -- ✅ FIX 2: ImageLabel for actual item icon
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0.85, 0, 0.85, 0)
+    icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.BackgroundTransparency = 1
+    icon.Image = ""
+    icon.ScaleType = Enum.ScaleType.Fit
+    icon.Parent = iconFrame
+    
+    -- Emoji fallback (only shown if no icon available)
+    local emojiIcon = Instance.new("TextLabel")
+    emojiIcon.Name = "EmojiIcon"
+    emojiIcon.Size = UDim2.new(1, 0, 1, 0)
+    emojiIcon.BackgroundTransparency = 1
+    emojiIcon.Text = "📦"
+    emojiIcon.TextSize = 36
+    emojiIcon.Font = Enum.Font.SourceSansBold
+    emojiIcon.Visible = false
+    emojiIcon.Parent = iconFrame
+    
+    -- Title label (transforms between "Collect Item" and "✓ Item Collected!")
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Size = UDim2.new(1, -80, 0, 24)
+    titleLabel.Position = UDim2.new(0, 75, 0, 12)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.TextSize = 20
+    titleLabel.Text = "Collect Item"
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = prompt
+    
+    -- Detail label (shows item name)
+    local detailLabel = Instance.new("TextLabel")
+    detailLabel.Name = "Detail"
+    detailLabel.Size = UDim2.new(1, -80, 0, 20)
+    detailLabel.Position = UDim2.new(0, 75, 0, 38)
+    detailLabel.BackgroundTransparency = 1
+    detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    detailLabel.Font = Enum.Font.SourceSans
+    detailLabel.TextSize = 16
+    detailLabel.Text = "Item Name"
+    detailLabel.TextXAlignment = Enum.TextXAlignment.Left
+    detailLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    detailLabel.Parent = prompt
+    
+    -- Rarity label
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Name = "Rarity"
+    rarityLabel.Size = UDim2.new(1, -80, 0, 18)
+    rarityLabel.Position = UDim2.new(0, 75, 0, 58)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    rarityLabel.Font = Enum.Font.SourceSansBold
+    rarityLabel.TextSize = 14
+    rarityLabel.Text = "COMMON"
+    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rarityLabel.Parent = prompt
+    
+    itemPrompt = prompt
+end
+
+function ItemCollectionController._ShowPrompt(itemModel: Instance)
+    if not itemPrompt or isTransitioning then return end
+    
+    -- Get item ID and look up config
+    local itemId = itemModel:GetAttribute("itemId")
+    local itemName = itemModel:GetAttribute("itemName") or itemModel.Name
+    local rarity = ItemCollectionController._GetItemRarity(itemModel)
     local rarityLower = rarity:lower()
     
+    -- Update UI elements
+    local titleLabel = itemPrompt:FindFirstChild("Title")
+    local detailLabel = itemPrompt:FindFirstChild("Detail")
+    local rarityLabel = itemPrompt:FindFirstChild("Rarity")
+    local iconFrame = itemPrompt:FindFirstChild("IconFrame")
+    
+    if titleLabel then
+        titleLabel.Text = "Collect Item"
+    end
+    
     if detailLabel then
-        detailLabel.Text = itemName:gsub("_", " ")
-        detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+        -- Clean up the display name
+        local displayName = itemName:gsub("_", " ")
+        detailLabel.Text = displayName
     end
     
     if rarityLabel then
         rarityLabel.Text = rarity:upper()
         
+        -- ✅ FIX 3: Set rarity color for label
         if RARITY_COLORS[rarityLower] then
             rarityLabel.TextColor3 = RARITY_COLORS[rarityLower]
-        else
-            rarityLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
         end
     end
     
+    -- ✅ FIX 2 & 3: Update icon and colors based on item config
     if iconFrame then
         local icon = iconFrame:FindFirstChild("Icon")
         local emojiIcon = iconFrame:FindFirstChild("EmojiIcon")
         
         if icon and emojiIcon then
-            local iconId = itemInfo.icon or itemInfo.iconId
+            -- Try to get icon from stored item data
+            local iconId = nil
+            if currentItemData and currentItemData.icon then
+                iconId = currentItemData.icon
+            end
             
             if iconId and iconId ~= "" then
                 icon.Image = iconId
                 icon.Visible = true
                 emojiIcon.Visible = false
             else
+                -- Fallback to emoji if no icon
                 icon.Visible = false
                 emojiIcon.Visible = true
-                emojiIcon.Text = "ðŸ“¦"
+                emojiIcon.Text = "📦"
             end
         end
         
+        -- ✅ FIX 3: Icon frame background matches rarity
         if RARITY_COLORS[rarityLower] then
             iconFrame.BackgroundColor3 = RARITY_COLORS[rarityLower]
         end
     end
     
-    notificationGui.BackgroundTransparency = 1
-    notificationGui.Position = UDim2.new(0.5, 0, 0, 0)
+    -- ✅ FIX 3: Border color matches rarity
+    if promptBorder and RARITY_COLORS[rarityLower] then
+        promptBorder.Color = RARITY_COLORS[rarityLower]
+    end
     
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local tween1 = TweenService:Create(notificationGui, tweenInfo, {
-        BackgroundTransparency = 0.1,
-        Position = UDim2.new(0.5, 0, 0.1, 0)
-    })
-    tween1:Play()
+    -- ✅ FIX 4: Smooth fade-in animation
+    if not isNotificationShowing then
+        isNotificationShowing = true
+        
+        -- Start slightly above final position
+        itemPrompt.Position = UDim2.new(0.5, 0, 0.12, 0)
+        itemPrompt.BackgroundTransparency = 1
+        
+        local fadeIn = TweenService:Create(
+            itemPrompt,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {
+                BackgroundTransparency = 0.1,
+                Position = UDim2.new(0.5, 0, 0.15, 0)
+            }
+        )
+        fadeIn:Play()
+    end
     
-    task.wait(2)
+    itemPrompt.Visible = true
+end
+
+function ItemCollectionController._HidePrompt()
+    if not itemPrompt or isTransitioning then return end
     
-    local tweenInfo2 = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-    local tween2 = TweenService:Create(notificationGui, tweenInfo2, {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0, 0)
-    })
-    tween2:Play()
+    isNotificationShowing = false
+    
+    -- Fade out
+    local fadeOut = TweenService:Create(
+        itemPrompt,
+        TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        { BackgroundTransparency = 1 }
+    )
+    fadeOut:Play()
+    
+    fadeOut.Completed:Connect(function()
+        if not isNotificationShowing then
+            itemPrompt.Visible = false
+        end
+    end)
+end
+
+-- ✅ FIX 5: Transform notification from proximity to collected state
+function ItemCollectionController._TransformToCollected(itemInfo: any)
+    if not itemPrompt or isTransitioning then return end
+    
+    isTransitioning = true
+    
+    -- Scale up animation to draw attention
+    local scaleUp = TweenService:Create(
+        itemPrompt,
+        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        { Size = UDim2.new(0, 320, 0, 95) }
+    )
+    scaleUp:Play()
+    
+    scaleUp.Completed:Connect(function()
+        -- Update text to "Collected"
+        local titleLabel = itemPrompt:FindFirstChild("Title")
+        if titleLabel then
+            titleLabel.Text = "✓ Item Collected!"
+        end
+        
+        -- Hold for 2 seconds
+        task.wait(2)
+        
+        -- Fade out and reset
+        local fadeOut = TweenService:Create(
+            itemPrompt,
+            TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            {
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0.5, 0, 0.12, 0)
+            }
+        )
+        fadeOut:Play()
+        
+        fadeOut.Completed:Connect(function()
+            itemPrompt.Visible = false
+            itemPrompt.Size = UDim2.new(0, 300, 0, 85) -- Reset size
+            isNotificationShowing = false
+            isTransitioning = false
+        end)
+    end)
 end
 
 -- ============================
@@ -478,24 +527,27 @@ end
 -- ============================
 
 function ItemCollectionController._SetupInput()
+    -- Mouse click
     mouse.Button1Down:Connect(function()
-        if highlightedItem and not isCollecting then
+        if highlightedItem and not isCollecting and not isTransitioning then
             ItemCollectionController._TryCollect(highlightedItem)
         end
     end)
     
+    -- Touch input
     UserInputService.TouchTap:Connect(function(touchPositions, processed)
         if processed then return end
-        if highlightedItem and not isCollecting then
+        if highlightedItem and not isCollecting and not isTransitioning then
             ItemCollectionController._TryCollect(highlightedItem)
         end
     end)
     
+    -- Keyboard input (E key)
     UserInputService.InputBegan:Connect(function(input, processed)
         if processed then return end
         
         if input.KeyCode == Enum.KeyCode.E then
-            if highlightedItem and not isCollecting then
+            if highlightedItem and not isCollecting and not isTransitioning then
                 ItemCollectionController._TryCollect(highlightedItem)
             end
         end
@@ -507,7 +559,7 @@ end
 -- ============================
 
 function ItemCollectionController._TryCollect(itemModel: Instance)
-    if isCollecting then return end
+    if isCollecting or isTransitioning then return end
     if not itemModel or not itemModel.Parent then return end
     
     isCollecting = true
@@ -520,14 +572,89 @@ function ItemCollectionController._TryCollect(itemModel: Instance)
 end
 
 function ItemCollectionController._OnItemCollected(itemInfo: any)
-    print("âœ… Item collected on client:", itemInfo.itemName)
-    ItemCollectionController._ShowNotification(itemInfo)
+    print("✅ Item collected on client:", itemInfo.itemName)
+    
+    -- ✅ FIX 5: Transform the proximity notification instead of creating a new one
+    if isNotificationShowing and itemPrompt and itemPrompt.Visible then
+        ItemCollectionController._TransformToCollected(itemInfo)
+    else
+        -- If proximity notification isn't showing (edge case), show traditional notification
+        ItemCollectionController._ShowTraditionalNotification(itemInfo)
+    end
+end
+
+-- Legacy notification for edge cases where proximity UI isn't active
+function ItemCollectionController._ShowTraditionalNotification(itemInfo: any)
+    -- Create temporary notification
+    local notif = Instance.new("Frame")
+    notif.Name = "CollectionNotification"
+    notif.Size = UDim2.new(0, 300, 0, 80)
+    notif.Position = UDim2.new(0.5, 0, 0.1, 0)
+    notif.AnchorPoint = Vector2.new(0.5, 0.5)
+    notif.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    notif.BackgroundTransparency = 1
+    notif.BorderSizePixel = 0
+    notif.Parent = playerGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = notif
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "Title"
+    titleLabel.Size = UDim2.new(1, -80, 0, 24)
+    titleLabel.Position = UDim2.new(0, 70, 0, 15)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.TextSize = 20
+    titleLabel.Text = "✓ Item Collected!"
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = notif
+    
+    local detailLabel = Instance.new("TextLabel")
+    detailLabel.Name = "Detail"
+    detailLabel.Size = UDim2.new(1, -80, 0, 20)
+    detailLabel.Position = UDim2.new(0, 70, 0, 42)
+    detailLabel.BackgroundTransparency = 1
+    detailLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    detailLabel.Font = Enum.Font.SourceSans
+    detailLabel.TextSize = 16
+    detailLabel.Text = (itemInfo.itemName or "Item"):gsub("_", " ")
+    detailLabel.TextXAlignment = Enum.TextXAlignment.Left
+    detailLabel.Parent = notif
+    
+    -- Fade in
+    local fadeIn = TweenService:Create(
+        notif,
+        TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {
+            BackgroundTransparency = 0.1,
+            Position = UDim2.new(0.5, 0, 0.12, 0)
+        }
+    )
+    fadeIn:Play()
+    
+    task.wait(2)
+    
+    -- Fade out
+    local fadeOut = TweenService:Create(
+        notif,
+        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        { BackgroundTransparency = 1 }
+    )
+    fadeOut:Play()
+    
+    fadeOut.Completed:Connect(function()
+        notif:Destroy()
+    end)
 end
 
 function ItemCollectionController._PlayCollectionEffect(itemModel: Instance)
     local itemPart = itemModel:FindFirstChild("ItemPart")
     if not itemPart then return end
     
+    -- Animate item floating up and shrinking
     local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
     local goal = {
         Position = itemPart.Position + Vector3.new(0, 5, 0),
@@ -537,6 +664,7 @@ function ItemCollectionController._PlayCollectionEffect(itemModel: Instance)
     local tween = TweenService:Create(itemPart, tweenInfo, goal)
     tween:Play()
     
+    -- Fade out highlight
     local highlight = itemModel:FindFirstChildWhichIsA("Highlight")
     if highlight then
         local fadeTween = TweenService:Create(highlight, tweenInfo, {
@@ -554,11 +682,12 @@ end
 function ItemCollectionController.Cleanup()
     if itemPrompt then
         itemPrompt:Destroy()
+        itemPrompt = nil
     end
     
-    if notificationGui then
-        notificationGui:Destroy()
-    end
+    isNotificationShowing = false
+    isTransitioning = false
+    currentItemData = nil
 end
 
 return ItemCollectionController

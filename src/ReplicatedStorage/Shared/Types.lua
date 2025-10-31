@@ -2,29 +2,133 @@
     Types.lua
     Type definitions for Garden Creatures (Luau type annotations)
     
+    ✅ UPDATED FOR NEW ITEMS SYSTEM
+    - Changed from Seed types to Item types
+    - Added Form and Substance types
+    - Removed "Epic" rarity (only 4 rarities now)
+    - Added template types
+    - Updated to match Items.lua structure
+    
     This file provides type safety and better IDE autocomplete
 ]]
 
-export type Rarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary"
+-- ================================
+-- CORE TYPES
+-- ================================
+
+export type Rarity = "common" | "uncommon" | "rare" | "legendary"
 
 export type Element = "nature" | "fire" | "water" | "shadow" | "crystal" | "celestial"
 
--- Seed types
-export type Seed = {
+export type ItemType = "Form" | "Substance"
+
+-- ================================
+-- ITEM TYPES (NEW SYSTEM)
+-- ================================
+
+-- Base item properties (shared by all items)
+export type BaseItem = {
     id: string,
+    templateId: string,
     name: string,
     description: string,
+    itemType: ItemType,
     rarity: Rarity,
-    plantType: string,
     icon: string,
     stackSize: number,
     sellPrice: number,
-    specialProperty: string?,
-    growthMultiplier: number?,
     glowEffect: boolean?,
+    particleEffect: string?,
+    specialProperty: string?,
 }
 
--- Plant types
+-- Form item (defines creature body type)
+export type FormItem = BaseItem & {
+    formType: string,
+    baseModel: string,
+    baseSize: Vector3,
+    baseStats: {
+        [string]: number,
+    },
+}
+
+-- Substance item (defines material/appearance)
+export type SubstanceItem = BaseItem & {
+    substanceType: string,
+    material: Enum.Material,
+    baseColor: Color3,
+    texture: string,
+    statModifiers: {
+        [string]: number,
+    },
+}
+
+-- Union type for any item
+export type Item = FormItem | SubstanceItem
+
+-- ================================
+-- TEMPLATE TYPES (FOR CONFIG)
+-- ================================
+
+export type ItemVariant = {
+    icon: string,
+    specialProperty: string?,
+    glowEffect: boolean?,
+    particleEffect: string?,
+    description: string?,
+    baseColor: Color3?,
+}
+
+export type FormTemplate = {
+    id: string,
+    name: string,
+    description: string,
+    itemType: "Form",
+    formType: string,
+    baseModel: string,
+    baseSize: Vector3,
+    baseStats: {
+        [string]: number,
+    },
+    baseStackSize: number,
+    basePrice: number,
+    variants: {
+        common: ItemVariant,
+        uncommon: ItemVariant,
+        rare: ItemVariant,
+        legendary: ItemVariant,
+    },
+    spawnZones: {string},
+}
+
+export type SubstanceTemplate = {
+    id: string,
+    name: string,
+    description: string,
+    itemType: "Substance",
+    substanceType: string,
+    material: Enum.Material,
+    baseColor: Color3,
+    texture: string,
+    particleEffect: string?,
+    baseStatModifiers: {
+        [string]: number,
+    },
+    baseStackSize: number,
+    basePrice: number,
+    variants: {
+        common: ItemVariant,
+        uncommon: ItemVariant,
+        rare: ItemVariant,
+        legendary: ItemVariant,
+    },
+    spawnZones: {string},
+}
+
+-- ================================
+-- PLANT TYPES
+-- ================================
+
 export type PlantStage = {
     name: string,
     duration: number,  -- seconds
@@ -42,7 +146,7 @@ export type HarvestYield = {
 export type Plant = {
     name: string,
     rarity: Rarity,
-    seedId: string,
+    itemId: string,  -- Changed from seedId
     element: Element?,
     growthStages: {PlantStage},
     harvestYield: {HarvestYield},
@@ -57,7 +161,10 @@ export type Plant = {
     mutationChance: number?,
 }
 
--- Creature types
+-- ================================
+-- CREATURE TYPES
+-- ================================
+
 export type Ability = {
     id: string,
     name: string,
@@ -71,6 +178,7 @@ export type CreatureStats = {
     speed: number,
     size: number,
     followDistance: number,
+    [string]: number,  -- Allow any stat
 }
 
 export type Creature = {
@@ -102,7 +210,35 @@ export type CreatureInstance = {
     mutation: string?,            -- Mutation variant if any
 }
 
--- Recipe types
+-- ================================
+-- CREATURE PLOT TYPES (NEW)
+-- ================================
+
+export type PlotSlotType = "Form" | "Substance" | "PrimaryAttribute" | "SecondaryAttribute"
+
+export type PlotSlotConfig = {
+    name: string,
+    description: string,
+    icon: string,
+    required: boolean,
+}
+
+export type CreaturePlotData = {
+    plotId: string,
+    formItemId: string?,
+    substanceItemId: string?,
+    primaryAttributeItemId: string?,
+    secondaryAttributeItemId: string?,
+    isGrowing: boolean,
+    growthStartTime: number?,
+    growthDuration: number,
+    ownerId: number,
+}
+
+-- ================================
+-- RECIPE TYPES
+-- ================================
+
 export type RecipeMaterial = {
     item: string,
     amount: number,
@@ -124,7 +260,10 @@ export type Recipe = {
     mutationVariants: {string}?,
 }
 
--- Inventory types
+-- ================================
+-- INVENTORY TYPES
+-- ================================
+
 export type InventoryItem = {
     itemId: string,
     amount: number,
@@ -139,7 +278,10 @@ export type Inventory = {
     usedSlots: number,
 }
 
--- Player data types
+-- ================================
+-- PLAYER DATA TYPES
+-- ================================
+
 export type PlayerData = {
     -- Currency
     coins: number,
@@ -153,6 +295,10 @@ export type PlayerData = {
     maxFollowSlots: number,
     creatureStorage: {CreatureInstance},
     maxStorageSlots: number,
+    
+    -- Creature Plots (NEW)
+    creaturePlots: {CreaturePlotData},
+    maxCreaturePlots: number,
     
     -- Garden
     gardenPlots: {PlotData},
@@ -178,7 +324,7 @@ export type PlayerData = {
 export type PlotData = {
     plotId: string,
     plotType: string,
-    plantedSeed: string?,
+    plantedItem: string?,  -- Changed from plantedSeed
     plantStage: number,
     plantedTimestamp: number?,
     harvestReady: boolean,
@@ -203,7 +349,10 @@ export type PlayerStats = {
     timePlayed: number,
 }
 
--- Trading types
+-- ================================
+-- TRADING TYPES
+-- ================================
+
 export type TradeOffer = {
     coins: number,
     items: {[string]: number},
@@ -223,7 +372,10 @@ export type TradeSession = {
     createdTimestamp: number,
 }
 
--- Economy types
+-- ================================
+-- ECONOMY TYPES
+-- ================================
+
 export type ShopItem = {
     id: string,
     name: string,
@@ -244,15 +396,27 @@ export type Gamepass = {
     benefits: {string},
 }
 
--- Spawn types
+-- ================================
+-- SPAWN TYPES
+-- ================================
+
 export type SpawnZone = {
     name: string,
     position: Vector3,
     radius: number,
     spawnRate: number,
-    allowedCreatureTypes: {string},
+    allowedItems: {string},  -- Changed from allowedCreatureTypes
     rareSpawnBonus: number?,
     requiresLevel: number?,
+}
+
+export type ItemSpawn = {
+    instanceId: string,
+    itemId: string,
+    position: Vector3,
+    spawnZone: string,
+    spawnedTimestamp: number,
+    model: Model,
 }
 
 export type WildCreature = {
@@ -266,4 +430,28 @@ export type WildCreature = {
     model: Model,
 }
 
+-- ================================
+-- UI TYPES
+-- ================================
+
+export type NotificationData = {
+    title: string,
+    message: string,
+    duration: number?,
+    icon: string?,
+    rarity: Rarity?,
+}
+
+export type DialogData = {
+    title: string,
+    message: string,
+    buttons: {
+        {
+            text: string,
+            callback: () -> (),
+        }
+    },
+}
+
+-- Export empty table (types are just for annotations)
 return {}
