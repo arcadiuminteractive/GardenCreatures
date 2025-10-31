@@ -2,7 +2,7 @@
     DataManager.lua - REFACTORED VERSION
     Manages player progression data using ProfileStore
     
-    âœ… REFACTORED:
+    ✅ REFACTORED:
     1. Removed inventory management (now handled by InventoryManager)
     2. Focuses on: currency, XP, level, creatures, gardens, progression, stats
     3. Clean separation of concerns
@@ -60,7 +60,7 @@ function DataManager.GetDefaultData()
         xp = 0,
         level = 1,
         
-        -- âœ… REMOVED: Inventory is now handled by InventoryManager
+        -- ✅ REMOVED: Inventory is now handled by InventoryManager
         -- Inventory data is stored separately in InventoryManager's own system
         
         -- Creatures
@@ -159,7 +159,7 @@ local function _CleanExpiredEffects(player: Player)
 end
 
 local function _OnDataLoaded(player: Player)
-    print("ðŸ“Š Data loaded for:", player.Name)
+    print("✅ Data loaded for:", player.Name)
 end
 
 -- ============================
@@ -200,7 +200,7 @@ function DataManager.InitializePlayer(player: Player)
             -- Clean up expired effects
             _CleanExpiredEffects(player)
             
-            print("âœ… Loaded profile for:", player.Name)
+            print("✅ Loaded profile for:", player.Name)
             
             _OnDataLoaded(player)
             
@@ -585,7 +585,7 @@ game:BindToClose(function()
     task.wait(3)
 end)
 
-print("âœ… DataManager loaded successfully!")
-print("ðŸ“¦ Inventory is managed separately by InventoryManager")
+print("✅ DataManager loaded successfully!")
+print("✅ Inventory is managed separately by InventoryManager")
 
 return DataManager

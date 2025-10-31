@@ -120,9 +120,9 @@ Items.formTemplates = {
     },
     
     {
-        id = "gorilla_hand",
-        name = "Gorilla Hand",
-        description = "The mighty hand of a silverback gorilla",
+        id = "gorilla_skull",
+        name = "Gorilla Skull",
+        description = "The mighty skull of a silverback gorilla",
         itemType = "Form",
         
         formType = "gorilla",
@@ -565,6 +565,12 @@ function Items._BuildSpawnZones()
                 end
             end
         end
+    end
+    
+    -- Debug: Print what was built
+    print("📍 Built spawn zones:")
+    for zoneName, itemIds in pairs(Items.spawnZones) do
+        print("  -", zoneName, ":", #itemIds, "items")
     end
 end
 

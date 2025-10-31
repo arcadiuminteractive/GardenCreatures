@@ -42,7 +42,7 @@ local UpdateInventoryEvent = nil
 -- ============================
 
 function InventoryController.Init()
-    print("ðŸŽ’ Initializing Inventory Controller...")
+    print("🎒 Initializing Inventory Controller...")
     
     -- Setup RemoteEvents
     InventoryController._SetupRemotes()
@@ -53,11 +53,11 @@ function InventoryController.Init()
     -- Setup input handling
     InventoryController._SetupInput()
     
-    print("âœ… Inventory Controller initialized")
+    print("✅… Inventory Controller initialized")
 end
 
 function InventoryController.Start()
-    print("ðŸŽ’ Starting Inventory Controller...")
+    print("🎒 Starting Inventory Controller...")
     
     -- Load and initialize UI modules
     local UI = script.Parent.Parent.UI
@@ -78,7 +78,7 @@ function InventoryController.Start()
                 end)
             end
         end
-        print("âœ… Inventory button created")
+        print("✅… Inventory button created")
     else
         warn("âš ï¸  InventoryButton module not found in UI folder")
     end
@@ -102,7 +102,7 @@ function InventoryController.Start()
                 end
             end
         end
-        print("âœ… Inventory UI created")
+        print("✅… Inventory UI created")
     else
         warn("âš ï¸  InventoryUI module not found in UI folder")
     end
@@ -118,7 +118,7 @@ function InventoryController.Start()
         end
     end
     
-    print("âœ… Inventory Controller started")
+    print("✅… Inventory Controller started")
 end
 
 -- ============================
@@ -204,7 +204,7 @@ function InventoryController.OpenInventory()
     -- Refresh inventory display
     InventoryController._RefreshInventoryDisplay()
     
-    print("ðŸŽ’ Inventory opened")
+    print("🎒 Inventory opened")
 end
 
 function InventoryController.CloseInventory()
@@ -213,7 +213,7 @@ function InventoryController.CloseInventory()
     isInventoryOpen = false
     inventoryUI.Enabled = false
     
-    print("ðŸŽ’ Inventory closed")
+    print("🎒 Inventory closed")
 end
 
 function InventoryController._OnInventoryUpdate(newInventoryData)
@@ -225,7 +225,7 @@ function InventoryController._OnInventoryUpdate(newInventoryData)
         InventoryController._RefreshInventoryDisplay()
     end
     
-    print("ðŸŽ’ Inventory updated from server")
+    print("🎒 Inventory updated from server")
 end
 
 function InventoryController._RefreshInventoryDisplay()
@@ -259,13 +259,13 @@ function InventoryController._RefreshInventoryDisplay()
     if itemIcon then
         itemIcon.Visible = true
         
-        -- âœ… Look up seed config and set icon
+        -- ✅… Look up seed config and set icon
         local itemConfig = InventoryController._GetItemConfig(itemData.itemId)
         if itemConfig and itemConfig.icon then
             itemIcon.Image = itemConfig.icon
         else
             itemIcon.Visible = false
-            warn("âš ï¸  No icon found for item:", itemData.itemId)
+            warn(":(😢¸  No icon found for item:", itemData.itemId)
         end
     end
     
@@ -320,6 +320,6 @@ function InventoryController.GetMaxStackSize(): number
     return MAX_STACK_SIZE
 end
 
-print("âœ… InventoryController loaded")
+print("✅… InventoryController loaded")
 
 return InventoryController

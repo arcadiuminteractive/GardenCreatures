@@ -162,22 +162,21 @@ end
 
 function ItemSpawnController._GetAllowedItems(zonePart: Part): {string}
     local zoneType = zonePart:GetAttribute("ZoneType") or "meadow"
+    local zoneLower = zoneType:lower()
     
-    local allowedItems = {}
-    local zoneConfig = Config.Items.spawnZones[zoneType:lower()]
+    -- Items.lua now provides a flat array
+    local allowedItems = Config.Items.spawnZones[zoneLower]
     
-    if not zoneConfig then
+    -- Fallback to meadow if zone not found
+    if not allowedItems or #allowedItems == 0 then
         warn("⚠️ Unknown zone type:", zoneType, "- using meadow defaults")
-        zoneConfig = Config.Items.spawnZones.meadow
+        allowedItems = Config.Items.spawnZones["meadow"]
     end
     
-    -- Collect all items from zone config
-    for rarity, items in pairs(zoneConfig) do
-        if type(items) == "table" then
-            for _, itemId in ipairs(items) do
-                table.insert(allowedItems, itemId)
-            end
-        end
+    -- Final safety check
+    if not allowedItems then
+        warn("❌ No spawn zones configured!")
+        return {}
     end
     
     return allowedItems
