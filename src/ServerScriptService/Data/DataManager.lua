@@ -2,7 +2,7 @@
     DataManager.lua - REFACTORED VERSION
     Manages player progression data using ProfileStore
     
-    ✅ REFACTORED:
+    âœ… REFACTORED:
     1. Removed inventory management (now handled by InventoryManager)
     2. Focuses on: currency, XP, level, creatures, gardens, progression, stats
     3. Clean separation of concerns
@@ -34,7 +34,7 @@ local ProfileStoreModule = require(ServerScriptService:WaitForChild("ProfileStor
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = {
     Economy = require(Shared.Config.Economy),
-    Seeds = require(Shared.Config.Seeds),
+    Items = require(Shared.Config.Items),
     Plants = require(Shared.Config.Plants),
     Creatures = require(Shared.Config.Creatures),
 }
@@ -60,7 +60,7 @@ function DataManager.GetDefaultData()
         xp = 0,
         level = 1,
         
-        -- ✅ REMOVED: Inventory is now handled by InventoryManager
+        -- âœ… REMOVED: Inventory is now handled by InventoryManager
         -- Inventory data is stored separately in InventoryManager's own system
         
         -- Creatures
@@ -72,6 +72,10 @@ function DataManager.GetDefaultData()
         gardenPlots = {},       -- Array of plot data
         maxPlots = 9,          -- Default plot limit
         
+        -- Creature Plots (NEW)
+        creaturePlots = {},     -- Array of creature plot data
+        maxCreaturePlots = 5,   -- Default creature plot limit
+        
         -- Progression
         unlockedRecipes = {},   -- Array of recipe IDs
         discoveredCreatures = {}, -- Array of creature IDs found
@@ -82,7 +86,7 @@ function DataManager.GetDefaultData()
         
         -- Stats
         stats = {
-            seedsCollected = 0,
+            itemsCollected = 0,
             plantsGrown = 0,
             creaturesDiscovered = 0,
             coinsEarned = 0,
@@ -133,7 +137,7 @@ local function _LoadGamepasses(player: Player)
 end
 
 local function _ApplyGamepassBenefits(player: Player, gamepassId: number)
-    print("🎫 Applied benefits for gamepass:", gamepassId, "to", player.Name)
+    print("ðŸŽ« Applied benefits for gamepass:", gamepassId, "to", player.Name)
 end
 
 local function _CleanExpiredEffects(player: Player)
@@ -155,7 +159,7 @@ local function _CleanExpiredEffects(player: Player)
 end
 
 local function _OnDataLoaded(player: Player)
-    print("📊 Data loaded for:", player.Name)
+    print("ðŸ“Š Data loaded for:", player.Name)
 end
 
 -- ============================
@@ -196,7 +200,7 @@ function DataManager.InitializePlayer(player: Player)
             -- Clean up expired effects
             _CleanExpiredEffects(player)
             
-            print("✅ Loaded profile for:", player.Name)
+            print("âœ… Loaded profile for:", player.Name)
             
             _OnDataLoaded(player)
             
@@ -206,7 +210,7 @@ function DataManager.InitializePlayer(player: Player)
             return false
         end
     else
-        warn("❌ Failed to load profile for:", player.Name)
+        warn("âŒ Failed to load profile for:", player.Name)
         player:Kick("Failed to load your data. Please rejoin!")
         return false
     end
@@ -240,7 +244,7 @@ function DataManager.PlayerRemoving(player: Player)
         profile.Data.lastSave = os.time()
         profile:EndSession()
         Profiles[player] = nil
-        print("💾 Saved and released profile for:", player.Name)
+        print("ðŸ’¾ Saved and released profile for:", player.Name)
     end
 end
 
@@ -303,7 +307,7 @@ function DataManager.SetCurrency(player: Player, currencyType: string, amount: n
 end
 
 -- ============================
--- ⛔ INVENTORY METHODS REMOVED
+-- â›” INVENTORY METHODS REMOVED
 -- Use InventoryManager instead for all inventory operations
 -- ============================
 
@@ -553,7 +557,7 @@ task.spawn(function()
             end
         end
         
-        print("💾 Auto-save completed")
+        print("ðŸ’¾ Auto-save completed")
     end
 end)
 
@@ -570,7 +574,7 @@ end)
 -- ============================
 
 game:BindToClose(function()
-    print("🛑 Server shutting down - saving all data...")
+    print("ðŸ›‘ Server shutting down - saving all data...")
     
     for player, profile in pairs(Profiles) do
         if profile then
@@ -581,7 +585,7 @@ game:BindToClose(function()
     task.wait(3)
 end)
 
-print("✅ DataManager loaded successfully!")
-print("📦 Inventory is managed separately by InventoryManager")
+print("âœ… DataManager loaded successfully!")
+print("ðŸ“¦ Inventory is managed separately by InventoryManager")
 
 return DataManager

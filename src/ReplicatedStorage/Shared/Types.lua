@@ -132,7 +132,7 @@ export type InventoryItem = {
 }
 
 export type Inventory = {
-    seeds: {[string]: number},
+    items: {[string]: number},
     materials: {[string]: number},
     creatures: {CreatureInstance},
     maxSlots: number,
@@ -193,7 +193,7 @@ export type PlayerSettings = {
 }
 
 export type PlayerStats = {
-    seedsCollected: number,
+    itemsCollected: number,
     plantsHarvested: number,
     creaturesCreated: number,
     creaturesTamed: number,
@@ -206,7 +206,7 @@ export type PlayerStats = {
 -- Trading types
 export type TradeOffer = {
     coins: number,
-    seeds: {[string]: number},
+    items: {[string]: number},
     materials: {[string]: number},
     creatures: {string},  -- Instance IDs
 }

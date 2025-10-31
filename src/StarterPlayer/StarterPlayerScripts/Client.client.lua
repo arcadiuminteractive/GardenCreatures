@@ -16,7 +16,8 @@ local Shared = ReplicatedStorage.Shared
 
 -- Load configuration (read-only on client)
 local Config = {
-    Seeds = require(Shared.Config.Seeds),
+    Items = require(Shared.Config.Items),         -- ✨ RENAMED from Seeds
+    CreaturePlots = require(Shared.Config.CreaturePlots),  -- ✨ NEW
     Plants = require(Shared.Config.Plants),
     Recipes = require(Shared.Config.Recipes),
     Creatures = require(Shared.Config.Creatures),
@@ -29,8 +30,9 @@ local UI = script.Parent.UI
 
 -- Controllers to load
 local ControllersToLoad = {
-    "SeedCollectionController",
+    "ItemCollectionController",        -- ✨ RENAMED from SeedCollectionController
     "InventoryController",
+    -- "CreaturePlotUIController",     -- 🚧 TODO: Create this
 }
 
 local LoadedControllers = {}

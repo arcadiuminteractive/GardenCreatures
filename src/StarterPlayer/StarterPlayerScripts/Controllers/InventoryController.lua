@@ -17,7 +17,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Config = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config")
-local SeedsConfig = require(Config:WaitForChild("Seeds"))
+local ItemsConfig = require(Config:WaitForChild("Items"))
 
 -- Constants
 local INVENTORY_SLOTS = 10
@@ -174,10 +174,10 @@ function InventoryController._SetupInput()
     end)
 end
 
-function InventoryController._GetSeedConfig(seedId: string): any?
-    for _, seed in ipairs(SeedsConfig.seeds) do
-        if seed.id == seedId then
-            return seed
+function InventoryController._GetItemConfig(itemId: string): any?
+    for _, item in ipairs(ItemsConfig.items) do
+        if item.id == itemId then
+            return item
         end
     end
     return nil
@@ -263,9 +263,9 @@ function InventoryController._RefreshInventoryDisplay()
         itemIcon.Visible = true
         
         -- ✅ Look up seed config and set icon
-        local seedConfig = InventoryController._GetSeedConfig(itemData.itemId)
-        if seedConfig and seedConfig.icon then
-            itemIcon.Image = seedConfig.icon
+        local itemConfig = InventoryController._GetItemConfig(itemData.itemId)
+        if itemConfig and itemConfig.icon then
+            itemIcon.Image = itemConfig.icon
         else
             itemIcon.Visible = false
             warn("⚠️  No icon found for item:", itemData.itemId)

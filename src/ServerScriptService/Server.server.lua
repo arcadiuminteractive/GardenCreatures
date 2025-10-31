@@ -28,7 +28,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 
 -- Load configuration
 local Config = {
-    Seeds = require(Shared.Config.Seeds),
+    Items = require(Shared.Config.Items),         -- ✨ RENAMED from Seeds
+    CreaturePlots = require(Shared.Config.CreaturePlots),  -- ✨ NEW
     Plants = require(Shared.Config.Plants),
     Recipes = require(Shared.Config.Recipes),
     Creatures = require(Shared.Config.Creatures),
@@ -80,10 +81,10 @@ end
 print("📡 Creating RemoteEvents...")
 
 -- Seed Collection System
-CreateRemoteEvent("CollectSeed")
+CreateRemoteEvent("CollectItems")
 
 -- Plant System
-CreateRemoteEvent("PlantSeed")
+CreateRemoteEvent("PlantItem")
 CreateRemoteEvent("HarvestPlant")
 CreateRemoteEvent("WaterPlant")
 
@@ -123,8 +124,13 @@ local LoadedSystems = {
 
 -- Systems to load (in order)
 local SystemsToLoad = {
-    { folder = "SeedSpawnSystem", module = "SeedSpawnController" },
+    -- Core system (special case - loaded differently)
+    -- DataManager is loaded separately above
+    
+    -- Gameplay systems
     { folder = "InventorySystem", module = "InventoryManager" },
+    { folder = "CreaturePlotSystem", module = "CreaturePlotManager" },  -- ✨ NEW
+    { folder = "ItemSpawnSystem", module = "ItemSpawnController" },      -- ✨ RENAMED
     
     -- Uncomment these as you implement them:
     -- { folder = "EconomySystem", module = "CurrencyManager" },
@@ -282,8 +288,24 @@ _G.GC_GetData = function(player)
     return DataManager.GetData(player)
 end
 
+-- Updated for new item system
+_G.GC_AddItem = function(player, itemId, amount)
+    local Items = require(game.ReplicatedStorage.Shared.Config.Items)
+    local item = Items.GetItemById(itemId)
+    
+    if not item then
+        warn("❌ Item not found:", itemId)
+        return false
+    end
+    
+    local InventoryManager = require(game.ServerScriptService.Systems.InventorySystem.InventoryManager)
+    return InventoryManager.AddItem(player, itemId, item.name, amount or 1)
+end
+
+-- Backward compatibility (deprecated)
 _G.GC_AddSeed = function(player, seedId, amount)
-    return DataManager.AddItem(player, "seeds", seedId, amount or 1)
+    warn("⚠️ GC_AddSeed is deprecated, use GC_AddItem instead")
+    return _G.GC_AddItem(player, seedId, amount)
 end
 
 -- ============================
