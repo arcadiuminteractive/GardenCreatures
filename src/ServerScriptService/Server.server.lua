@@ -170,8 +170,8 @@ Players.PlayerAdded:Connect(function(player)
     DataManager.LoadPlayerData(player)
     
     -- Setup inventory
-    if systems.InventoryManager then
-        systems.InventoryManager.SetupInventory(player)
+    if systems.InventoryManager and systems.InventoryManager.SetupPlayer then
+        systems.InventoryManager.SetupPlayer(player)
     end
     
     -- Setup creature plots
@@ -188,8 +188,11 @@ Players.PlayerRemoving:Connect(function(player)
     print("👋 Player leaving:", player.Name)
     
     -- Cleanup inventory (with safety check)
-    if systems.InventoryManager and systems.InventoryManager.CleanupInventory then
-        systems.InventoryManager.CleanupInventory(player)
+    if systems.InventoryManager then
+        local cleanup = systems.InventoryManager.CleanupPlayer or systems.InventoryManager.CleanupInventory
+        if cleanup then
+            cleanup(player)
+        end
     end
     
     -- Cleanup creature plots (with safety check)

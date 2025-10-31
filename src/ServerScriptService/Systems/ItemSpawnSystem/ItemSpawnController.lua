@@ -163,23 +163,28 @@ end
 function ItemSpawnController._GetAllowedItems(zonePart: Part): {string}
     local zoneType = zonePart:GetAttribute("ZoneType") or "meadow"
     local zoneLower = zoneType:lower()
-    
-    -- Items.lua now provides a flat array
-    local allowedItems = Config.Items.spawnZones[zoneLower]
-    
+
+    local spawnZones = Config.Items.GetSpawnZones()
+    local allowedItems = spawnZones[zoneLower]
+
     -- Fallback to meadow if zone not found
     if not allowedItems or #allowedItems == 0 then
         warn("⚠️ Unknown zone type:", zoneType, "- using meadow defaults")
-        allowedItems = Config.Items.spawnZones["meadow"]
+        allowedItems = spawnZones["meadow"]
     end
-    
+
     -- Final safety check
     if not allowedItems then
         warn("❌ No spawn zones configured!")
         return {}
     end
-    
-    return allowedItems
+
+    local allowedCopy = {}
+    for index, itemId in ipairs(allowedItems) do
+        allowedCopy[index] = itemId
+    end
+
+    return allowedCopy
 end
 
 -- ============================
@@ -252,12 +257,9 @@ function ItemSpawnController._SelectRandomItem(allowedItems: {string}): string?
     for _, itemId in ipairs(allowedItems) do
         local itemConfig = Config.Items.GetItemById(itemId)
         if itemConfig then
-            local weight = itemConfig.rarity == "common" and 100
-                or itemConfig.rarity == "uncommon" and 50
-                or itemConfig.rarity == "rare" and 25
-                or itemConfig.rarity == "legendary" and 1
-                or 50
-            
+            local rarityInfo = Config.Items.GetRarityInfo(itemConfig.rarity)
+            local weight = itemConfig.rarityWeight or (rarityInfo and rarityInfo.weight) or 1
+
             table.insert(itemWeights, {
                 itemId = itemId,
                 weight = weight
@@ -294,7 +296,7 @@ end
 function ItemSpawnController._CreateItemInstance(itemConfig: any, position: Vector3): Instance?
     local itemModel = Instance.new("Model")
     itemModel.Name = itemConfig.id
-    
+
     local itemPart = Instance.new("Part")
     itemPart.Name = "ItemPart"
     itemPart.Size = Vector3.new(1, 1, 1)
@@ -302,37 +304,40 @@ function ItemSpawnController._CreateItemInstance(itemConfig: any, position: Vect
     itemPart.Anchored = true
     itemPart.CanCollide = false
     itemPart.Material = Enum.Material.SmoothPlastic
-    
-    -- Color based on rarity
-    if itemConfig.rarity == "common" then
-        itemPart.Color = Color3.fromRGB(100, 200, 100)
-    elseif itemConfig.rarity == "uncommon" then
-        itemPart.Color = Color3.fromRGB(100, 100, 255)
-    elseif itemConfig.rarity == "rare" then
-        itemPart.Color = Color3.fromRGB(200, 100, 255)
-    elseif itemConfig.rarity == "legendary" then
-        itemPart.Color = Color3.fromRGB(255, 50, 50)
-    end
-    
+
+    -- Color based on rarity configuration (falls back to rarities table if needed)
+    local rarityInfo = Config.Items.GetRarityInfo(itemConfig.rarity)
+    local rarityColor = itemConfig.color or (rarityInfo and rarityInfo.color) or Color3.fromRGB(100, 200, 100)
+    itemPart.Color = rarityColor
+
     itemPart.Parent = itemModel
-    
+
     local clickDetector = Instance.new("ClickDetector")
     clickDetector.MaxActivationDistance = COLLECTION_RANGE
     clickDetector.Parent = itemPart
     
     local highlight = Instance.new("Highlight")
-    highlight.FillColor = itemPart.Color
+    highlight.FillColor = rarityColor
     highlight.OutlineColor = Color3.new(1, 1, 1)
     highlight.FillTransparency = 0.5
     highlight.OutlineTransparency = 0
     highlight.Parent = itemModel
-    
+
+    -- Replicate item metadata for clients
+    itemModel:SetAttribute("itemId", itemConfig.id)
+    itemModel:SetAttribute("itemName", itemConfig.name or itemConfig.baseName or itemConfig.id)
+    itemModel:SetAttribute("rarity", itemConfig.rarity)
+    itemModel:SetAttribute("rarityDisplayName", itemConfig.rarityDisplayName or itemConfig.rarity)
+    itemModel:SetAttribute("icon", itemConfig.icon or "")
+    itemModel:SetAttribute("baseId", itemConfig.baseId)
+    itemModel:SetAttribute("category", itemConfig.category)
+
     CollectionService:AddTag(itemModel, ITEM_TAG)
-    
+
     itemModel.Parent = workspace:FindFirstChild("Items") or workspace
-    
+
     ItemSpawnController._AddFloatingAnimation(itemPart)
-    
+
     return itemModel
 end
 
