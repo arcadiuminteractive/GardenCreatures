@@ -32,12 +32,12 @@ function ZoneSetup.SetupZone(zonePart: Part, config: {[string]: any})
     zonePart:SetAttribute("ZoneName", config.zoneName or zonePart.Name)
     zonePart:SetAttribute("ZoneType", config.zoneType or "meadow")
     zonePart:SetAttribute("SpawnRate", config.spawnRate or 1.0)
-    zonePart:SetAttribute("MaxSeeds", config.maxSeeds or 10)
+    zonePart:SetAttribute("MaxItems", config.maxItems or 10)
     zonePart:SetAttribute("RespawnTime", config.respawnTime or 30)
     
     -- Add tag
     local CollectionService = game:GetService("CollectionService")
-    CollectionService:AddTag(zonePart, "SeedZone")
+    CollectionService:AddTag(zonePart, "ItemZone")
     
     -- Make transparent and non-collidable for better visuals
     zonePart.Transparency = 0.8
@@ -70,7 +70,7 @@ end
 ]]
 function ZoneSetup.CreateZone(position: Vector3, size: Vector3, config: {[string]: any}, parent: Instance?): Part
     local zonePart = Instance.new("Part")
-    zonePart.Name = config.zoneName or "SeedZone"
+    zonePart.Name = config.zoneName or "ItemZone"
     zonePart.Size = size
     zonePart.Position = position
     zonePart.Anchored = true
@@ -88,7 +88,7 @@ function ZoneSetup.CreateMeadowZone(position: Vector3, size: Vector3): Part
     return ZoneSetup.CreateZone(position, size, {
         zoneName = "Meadow",
         zoneType = "meadow",
-        maxSeeds = 15,
+        maxItems = 15,
         respawnTime = 20,
     })
 end
@@ -97,7 +97,7 @@ function ZoneSetup.CreateForestZone(position: Vector3, size: Vector3): Part
     return ZoneSetup.CreateZone(position, size, {
         zoneName = "Forest",
         zoneType = "forest",
-        maxSeeds = 12,
+        maxItems = 12,
         respawnTime = 25,
     })
 end
@@ -106,7 +106,7 @@ function ZoneSetup.CreateVolcanicZone(position: Vector3, size: Vector3): Part
     return ZoneSetup.CreateZone(position, size, {
         zoneName = "Volcanic Area",
         zoneType = "volcanic",
-        maxSeeds = 8,
+        maxItems = 8,
         respawnTime = 40,
     })
 end
@@ -115,7 +115,7 @@ function ZoneSetup.CreateAquaticZone(position: Vector3, size: Vector3): Part
     return ZoneSetup.CreateZone(position, size, {
         zoneName = "Lakeside",
         zoneType = "aquatic",
-        maxSeeds = 10,
+        maxItems = 10,
         respawnTime = 30,
     })
 end
@@ -124,7 +124,7 @@ function ZoneSetup.CreateMysticalZone(position: Vector3, size: Vector3): Part
     return ZoneSetup.CreateZone(position, size, {
         zoneName = "Mystical Grove",
         zoneType = "mystical",
-        maxSeeds = 5,
+        maxItems = 5,
         respawnTime = 60, -- Rare spawns
         spawnRate = 0.5,
     })
@@ -135,7 +135,7 @@ end
 ]]
 function ZoneSetup.VisualizeZones()
     local CollectionService = game:GetService("CollectionService")
-    local zones = CollectionService:GetTagged("SeedZone")
+    local zones = CollectionService:GetTagged("ItemZone")
     
     for _, zone in ipairs(zones) do
         if zone:IsA("BasePart") then
@@ -158,7 +158,7 @@ function ZoneSetup.VisualizeZones()
             label.Text = string.format(
                 "%s\nMax: %d | Respawn: %ds",
                 zone:GetAttribute("ZoneName") or zone.Name,
-                zone:GetAttribute("MaxSeeds") or 10,
+                zone:GetAttribute("MaxItems") or 10,
                 zone:GetAttribute("RespawnTime") or 30
             )
             label.Parent = billboard
@@ -173,7 +173,7 @@ end
 ]]
 function ZoneSetup.HideZones()
     local CollectionService = game:GetService("CollectionService")
-    local zones = CollectionService:GetTagged("SeedZone")
+    local zones = CollectionService:GetTagged("ItemZone")
     
     for _, zone in ipairs(zones) do
         if zone:IsA("BasePart") then
@@ -194,19 +194,19 @@ end
 ]]
 function ZoneSetup.GetZoneStats()
     local CollectionService = game:GetService("CollectionService")
-    local zones = CollectionService:GetTagged("SeedZone")
+    local zones = CollectionService:GetTagged("ItemZone")
     
     local stats = {
         totalZones = #zones,
         byType = {},
-        totalMaxSeeds = 0,
+        totalMaxItems = 0,
     }
     
     for _, zone in ipairs(zones) do
         if zone:IsA("BasePart") then
             local zoneType = zone:GetAttribute("ZoneType") or "meadow"
             stats.byType[zoneType] = (stats.byType[zoneType] or 0) + 1
-            stats.totalMaxSeeds = stats.totalMaxSeeds + (zone:GetAttribute("MaxSeeds") or 10)
+            stats.totalMaxItems = stats.totalMaxItems + (zone:GetAttribute("MaxItems") or 10)
         end
     end
     

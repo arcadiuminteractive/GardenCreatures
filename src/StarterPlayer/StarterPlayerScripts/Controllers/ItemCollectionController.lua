@@ -2,7 +2,7 @@
     ItemCollectionController.lua - REFACTORED FOR NEW ITEM SYSTEM
     Client-side controller for item collection mechanics
     
-    ✅ CHANGES FROM SeedCollectionController:
+    âœ… CHANGES FROM SeedCollectionController:
     1. Works with new Items.lua config
     2. Updated naming (seeds -> items)
     3. Supports different item types (Form, Substance, Attribute)
@@ -63,7 +63,7 @@ local promptBorder = nil
 -- ============================
 
 function ItemCollectionController.Init()
-    print("🌱 Initializing Item Collection Controller...")
+    print("ðŸŒ± Initializing Item Collection Controller...")
     
     ItemCollectionController._SetupCharacter()
     ItemCollectionController._SetupItemTracking()
@@ -74,17 +74,17 @@ function ItemCollectionController.Init()
         ItemCollectionController._OnItemCollected(itemInfo)
     end)
     
-    print("✅ Item Collection Controller initialized")
+    print("âœ… Item Collection Controller initialized")
 end
 
 function ItemCollectionController.Start()
-    print("🌱 Starting Item Collection Controller...")
+    print("ðŸŒ± Starting Item Collection Controller...")
     
     task.spawn(function()
         ItemCollectionController._ProximityLoop()
     end)
     
-    print("✅ Item Collection Controller started")
+    print("âœ… Item Collection Controller started")
 end
 
 -- ============================
@@ -244,7 +244,7 @@ function ItemCollectionController._CreateUI()
     icon.Position = UDim2.new(0, 10, 0.5, 0)
     icon.AnchorPoint = Vector2.new(0, 0.5)
     icon.BackgroundTransparency = 1
-    icon.Text = "📦"
+    icon.Text = "ðŸ“¦"
     icon.TextScaled = true
     icon.Parent = prompt
     
@@ -307,7 +307,7 @@ function ItemCollectionController._CreateNotificationUI(screenGui: ScreenGui)
     emojiIcon.Name = "EmojiIcon"
     emojiIcon.Size = UDim2.new(1, 0, 1, 0)
     emojiIcon.BackgroundTransparency = 1
-    emojiIcon.Text = "✅"
+    emojiIcon.Text = "âœ…"
     emojiIcon.TextScaled = true
     emojiIcon.Visible = false
     emojiIcon.Parent = iconFrame
@@ -354,12 +354,17 @@ end
 function ItemCollectionController._ShowPrompt(itemModel: Instance)
     if not itemPrompt then return end
     
-    local itemName = itemModel.Name or "Item"
+    -- Get item name from attribute or fall back to model name
+    local itemName = itemModel:GetAttribute("itemName") or itemModel.Name
+    
     local label = itemPrompt:FindFirstChild("Label")
     if label then
-        label.Text = "Collect " .. itemName:gsub("_", " ")
+        -- Clean up the display name
+        local displayName = itemName:gsub("_", " ")
+        label.Text = "Collect " .. displayName
     end
     
+    -- Get rarity and update border color
     local rarity = ItemCollectionController._GetItemRarity(itemModel)
     if promptBorder and RARITY_COLORS[rarity] then
         promptBorder.Color = RARITY_COLORS[rarity]
@@ -375,11 +380,13 @@ function ItemCollectionController._HidePrompt()
 end
 
 function ItemCollectionController._GetItemRarity(itemModel: Instance): string
+    -- Try to get rarity from attribute (primary method)
     local rarity = itemModel:GetAttribute("rarity")
-    if rarity then
+    if rarity and type(rarity) == "string" then
         return rarity:lower()
     end
     
+    -- Fallback: try to find ItemData folder with rarity StringValue (legacy support)
     local itemData = itemModel:FindFirstChild("ItemData")
     if itemData then
         local rarityValue = itemData:FindFirstChild("rarity")
@@ -388,6 +395,7 @@ function ItemCollectionController._GetItemRarity(itemModel: Instance): string
         end
     end
     
+    -- Default to common if no rarity found
     return "common"
 end
 
@@ -436,7 +444,7 @@ function ItemCollectionController._ShowNotification(itemInfo: any)
             else
                 icon.Visible = false
                 emojiIcon.Visible = true
-                emojiIcon.Text = "📦"
+                emojiIcon.Text = "ðŸ“¦"
             end
         end
         
@@ -512,7 +520,7 @@ function ItemCollectionController._TryCollect(itemModel: Instance)
 end
 
 function ItemCollectionController._OnItemCollected(itemInfo: any)
-    print("✅ Item collected on client:", itemInfo.itemName)
+    print("âœ… Item collected on client:", itemInfo.itemName)
     ItemCollectionController._ShowNotification(itemInfo)
 end
 

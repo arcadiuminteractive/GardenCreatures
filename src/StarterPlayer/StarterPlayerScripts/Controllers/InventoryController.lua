@@ -42,7 +42,7 @@ local UpdateInventoryEvent = nil
 -- ============================
 
 function InventoryController.Init()
-    print("🎒 Initializing Inventory Controller...")
+    print("ðŸŽ’ Initializing Inventory Controller...")
     
     -- Setup RemoteEvents
     InventoryController._SetupRemotes()
@@ -53,11 +53,11 @@ function InventoryController.Init()
     -- Setup input handling
     InventoryController._SetupInput()
     
-    print("✅ Inventory Controller initialized")
+    print("âœ… Inventory Controller initialized")
 end
 
 function InventoryController.Start()
-    print("🎒 Starting Inventory Controller...")
+    print("ðŸŽ’ Starting Inventory Controller...")
     
     -- Load and initialize UI modules
     local UI = script.Parent.Parent.UI
@@ -78,9 +78,9 @@ function InventoryController.Start()
                 end)
             end
         end
-        print("✅ Inventory button created")
+        print("âœ… Inventory button created")
     else
-        warn("⚠️  InventoryButton module not found in UI folder")
+        warn("âš ï¸  InventoryButton module not found in UI folder")
     end
     
     -- Load InventoryUI module
@@ -102,9 +102,9 @@ function InventoryController.Start()
                 end
             end
         end
-        print("✅ Inventory UI created")
+        print("âœ… Inventory UI created")
     else
-        warn("⚠️  InventoryUI module not found in UI folder")
+        warn("âš ï¸  InventoryUI module not found in UI folder")
     end
     
     -- Request initial inventory data from server
@@ -118,7 +118,7 @@ function InventoryController.Start()
         end
     end
     
-    print("✅ Inventory Controller started")
+    print("âœ… Inventory Controller started")
 end
 
 -- ============================
@@ -136,13 +136,13 @@ function InventoryController._SetupRemotes()
     -- Get or create RemoteFunction for inventory requests
     RequestInventory = RemoteEvents:FindFirstChild("RequestInventory")
     if not RequestInventory then
-        warn("⚠️  RequestInventory RemoteFunction not found - inventory may not sync properly")
+        warn("âš ï¸  RequestInventory RemoteFunction not found - inventory may not sync properly")
     end
     
     -- Get or create RemoteEvent for inventory updates
     UpdateInventoryEvent = RemoteEvents:FindFirstChild("UpdateInventory")
     if not UpdateInventoryEvent then
-        warn("⚠️  UpdateInventory RemoteEvent not found - inventory may not update")
+        warn("âš ï¸  UpdateInventory RemoteEvent not found - inventory may not update")
     else
         -- Listen for inventory updates from server
         UpdateInventoryEvent.OnClientEvent:Connect(function(newInventoryData)
@@ -175,12 +175,9 @@ function InventoryController._SetupInput()
 end
 
 function InventoryController._GetItemConfig(itemId: string): any?
-    for _, item in ipairs(ItemsConfig.items) do
-        if item.id == itemId then
-            return item
-        end
-    end
-    return nil
+    -- Use the Items module's GetItemById helper function
+    -- which searches across forms, substances, and attributes
+    return ItemsConfig.GetItemById(itemId)
 end
 
 -- ============================
@@ -197,7 +194,7 @@ end
 
 function InventoryController.OpenInventory()
     if not inventoryUI then
-        warn("⚠️  Cannot open inventory - UI not found")
+        warn("âš ï¸  Cannot open inventory - UI not found")
         return
     end
     
@@ -207,7 +204,7 @@ function InventoryController.OpenInventory()
     -- Refresh inventory display
     InventoryController._RefreshInventoryDisplay()
     
-    print("🎒 Inventory opened")
+    print("ðŸŽ’ Inventory opened")
 end
 
 function InventoryController.CloseInventory()
@@ -216,7 +213,7 @@ function InventoryController.CloseInventory()
     isInventoryOpen = false
     inventoryUI.Enabled = false
     
-    print("🎒 Inventory closed")
+    print("ðŸŽ’ Inventory closed")
 end
 
 function InventoryController._OnInventoryUpdate(newInventoryData)
@@ -228,7 +225,7 @@ function InventoryController._OnInventoryUpdate(newInventoryData)
         InventoryController._RefreshInventoryDisplay()
     end
     
-    print("🎒 Inventory updated from server")
+    print("ðŸŽ’ Inventory updated from server")
 end
 
 function InventoryController._RefreshInventoryDisplay()
@@ -237,13 +234,13 @@ function InventoryController._RefreshInventoryDisplay()
     -- Find inventory slots container (it's inside MainFrame)
     local mainFrame = inventoryUI:FindFirstChild("MainFrame")
     if not mainFrame then
-        warn("⚠️  MainFrame not found in InventoryUI")
+        warn("âš ï¸  MainFrame not found in InventoryUI")
         return
     end
     
     local slotsContainer = mainFrame:FindFirstChild("SlotsContainer")
     if not slotsContainer then
-        warn("⚠️  SlotsContainer not found in MainFrame")
+        warn("âš ï¸  SlotsContainer not found in MainFrame")
         return
     end
     
@@ -262,13 +259,13 @@ function InventoryController._RefreshInventoryDisplay()
     if itemIcon then
         itemIcon.Visible = true
         
-        -- ✅ Look up seed config and set icon
+        -- âœ… Look up seed config and set icon
         local itemConfig = InventoryController._GetItemConfig(itemData.itemId)
         if itemConfig and itemConfig.icon then
             itemIcon.Image = itemConfig.icon
         else
             itemIcon.Visible = false
-            warn("⚠️  No icon found for item:", itemData.itemId)
+            warn("âš ï¸  No icon found for item:", itemData.itemId)
         end
     end
     
@@ -323,6 +320,6 @@ function InventoryController.GetMaxStackSize(): number
     return MAX_STACK_SIZE
 end
 
-print("✅ InventoryController loaded")
+print("âœ… InventoryController loaded")
 
 return InventoryController
