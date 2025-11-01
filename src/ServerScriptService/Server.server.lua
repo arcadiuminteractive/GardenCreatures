@@ -8,11 +8,14 @@
     3. Single initialization point
     4. Clear startup logging
     5. Proper error handling
+    6. No code duplication
+    7. Proper variable scoping
     
     ✅ FIXED ISSUES:
-    1. Print statements appearing before modules are loaded (lines 42-43, 111)
-    2. Missing error handling for DataManager and AdminCommands loading
-    3. No verification that InventoryManager loaded successfully
+    1. Removed duplicate PlayerAdded/PlayerRemoving handlers
+    2. Removed orphaned code blocks referencing undefined variables
+    3. Proper nil checks throughout
+    4. Consistent error handling patterns
 ]]
 
 -- ============================
@@ -57,10 +60,6 @@ else
 end
 
 local ProfileStore = result
-
--- ============================
--- Continue with rest of your server code...
--- ============================
 
 -- ============================
 -- STARTUP
@@ -243,6 +242,12 @@ end
 -- ============================
 
 local function HandlePlayerJoin(player)
+    -- Nil check for safety
+    if not player then
+        warn("⚠️ HandlePlayerJoin called with nil player")
+        return
+    end
+    
     print("👤 Player joined:", player.Name, "(UserId:", player.UserId .. ")")
     
     -- Wait for character
@@ -280,21 +285,13 @@ local function HandlePlayerJoin(player)
     
     -- Welcome message
     task.wait(2)
-    print("🌱 Welcome to Garden Creatures!")
+    print("🌱 Welcome to Garden Creatures,", player.Name .. "!")
 end
 
--- Connect for future players
-Players.PlayerAdded:Connect(HandlePlayerJoin)
-
--- ✅ Handle players already in game (important for Studio testing)
-for _, player in ipairs(Players:GetPlayers()) do
-    task.spawn(HandlePlayerJoin, player)
-end
-
--- ✅ SEPARATE PlayerRemoving handler (NOT inside PlayerAdded!)
-Players.PlayerRemoving:Connect(function(player)
+local function HandlePlayerLeave(player)
+    -- Nil check for safety
     if not player then
-        warn("⚠️ PlayerRemoving called with nil player")
+        warn("⚠️ HandlePlayerLeave called with nil player")
         return
     end
     
@@ -307,6 +304,8 @@ Players.PlayerRemoving:Connect(function(player)
             local success, err = pcall(cleanup, player)
             if not success then
                 warn("❌ Failed to cleanup inventory for", player.Name, ":", err)
+            else
+                print("✅ Cleaned up inventory for", player.Name)
             end
         end
     end
@@ -325,59 +324,19 @@ Players.PlayerRemoving:Connect(function(player)
     local success, err = pcall(DataManager.UnloadPlayerData, player)
     if not success then
         warn("❌ Failed to unload player data for", player.Name, ":", err)
+    else
+        print("✅ Unloaded player data for", player.Name)
     end
-end)
-    
-    -- Welcome message
-    task.wait(2)
-    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
+end
 
--- Connect for future players
+-- Connect event handlers
 Players.PlayerAdded:Connect(HandlePlayerJoin)
+Players.PlayerRemoving:Connect(HandlePlayerLeave)
 
 -- ✅ Handle players already in game (important for Studio testing)
 for _, player in ipairs(Players:GetPlayers()) do
     task.spawn(HandlePlayerJoin, player)
 end
-
-Players.PlayerRemoving:Connect(function(player)
-    print("👋 Player leaving:", player.Name)
-    
-    -- [rest of your PlayerRemoving code...]
-end)
-    
-    -- Welcome message
-    task.wait(2)
-    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
-
-Players.PlayerRemoving:Connect(function(player)
-    print("👋 Player leaving:", player.Name)
-    
-    -- Cleanup inventory (with safety check)
-    if systems.InventoryManager then
-        local cleanup = systems.InventoryManager.CleanupPlayer or systems.InventoryManager.CleanupInventory
-        if cleanup then
-            local success, err = pcall(cleanup, player)
-            if not success then
-                warn("❌ Failed to cleanup inventory for", player.Name, ":", err)
-            end
-        end
-    end
-    
-    -- Cleanup creature plots (with safety check)
-    if systems.CreaturePlotManager and systems.CreaturePlotManager.CleanupPlayerPlots then
-        local success, err = pcall(systems.CreaturePlotManager.CleanupPlayerPlots, player)
-        if not success then
-            warn("❌ Failed to cleanup creature plots for", player.Name, ":", err)
-        end
-    end
-    
-    -- Save and release player data
-    local success, err = pcall(DataManager.UnloadPlayerData, player)
-    if not success then
-        warn("❌ Failed to unload player data for", player.Name, ":", err)
-    end
-end)
 
 -- ============================
 -- SHUTDOWN HANDLING
@@ -390,6 +349,8 @@ game:BindToClose(function()
     local success, err = pcall(DataManager.SaveAllData)
     if not success then
         warn("❌ Error saving all data during shutdown:", err)
+    else
+        print("✅ All player data saved")
     end
     
     -- Cleanup all systems
@@ -397,6 +358,8 @@ game:BindToClose(function()
         local invSuccess, invErr = pcall(systems.InventoryManager.SaveAllInventories)
         if not invSuccess then
             warn("❌ Error saving inventories during shutdown:", invErr)
+        else
+            print("✅ All inventories saved")
         end
     end
     
