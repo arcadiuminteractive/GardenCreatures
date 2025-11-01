@@ -26,7 +26,27 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 -- ProfileStore
-local ProfileStoreModule = require(ServerScriptService:WaitForChild("ProfileStore"))
+local profileStoreContainer = ServerScriptService:WaitForChild("ProfileStore", 10)
+if not profileStoreContainer then
+    error("ProfileStore not found in ServerScriptService")
+end
+
+local ProfileStoreModule
+if profileStoreContainer:IsA("ModuleScript") then
+    -- ProfileStore is the ModuleScript itself
+    ProfileStoreModule = require(profileStoreContainer)
+else
+    -- ProfileStore is a folder, look for the ModuleScript inside
+    local moduleScript = profileStoreContainer:FindFirstChild("ProfileStore") 
+        or profileStoreContainer:FindFirstChild("init")
+    if moduleScript and moduleScript:IsA("ModuleScript") then
+        ProfileStoreModule = require(moduleScript)
+    else
+        error("No valid ModuleScript found in ProfileStore folder")
+    end
+end
+
+print("✅ ProfileStore loaded:", ProfileStoreModule)
 
 -- Constants
 local INVENTORY_SLOTS = 10
@@ -67,7 +87,7 @@ end
 
 -- Initialize ProfileStore for inventory
 local InventoryStore = ProfileStoreModule.New(
-    PlayerInventory_v1,
+    "PlayerInventory_v1",  -- ✅ Wrapped in quotes!
     GetDefaultInventoryData()
 )
 

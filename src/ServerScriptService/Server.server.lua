@@ -24,6 +24,45 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local ServerStorage = game:GetService("ServerStorage")
 
 -- ============================
+-- 🔍 DIAGNOSTIC: ProfileStore Loading
+-- ============================
+print("🔍 Attempting to load ProfileStore...")
+
+local ProfileStoreModule = ServerScriptService:WaitForChild("ProfileStore", 10)
+if not ProfileStoreModule then
+    error("❌ ProfileStore not found after waiting 10 seconds")
+end
+print("✅ Found ProfileStore")
+
+print("📋 ProfileStore ClassName:", ProfileStoreModule.ClassName)
+if not ProfileStoreModule:IsA("ModuleScript") then
+    error("❌ ProfileStore is not a ModuleScript!")
+end
+print("✅ ProfileStore is a ModuleScript")
+
+print("📦 Attempting to require ProfileStore...")
+local success, result = pcall(require, ProfileStoreModule)
+
+if success then
+    print("✅ ProfileStore loaded successfully!")
+    print("📦 Module type:", type(result))
+    if type(result) == "table" then
+        print("📋 Module contents:")
+        for key, value in pairs(result) do
+            print("  -", key, ":", type(value))
+        end
+    end
+else
+    error("❌ Failed to require ProfileStore: " .. tostring(result))
+end
+
+local ProfileStore = result
+
+-- ============================
+-- Continue with rest of your server code...
+-- ============================
+
+-- ============================
 -- STARTUP
 -- ============================
 print("🌱 Garden Creatures - Server Starting...")
