@@ -29,13 +29,123 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 -- Configuration
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local ConfigFolder = Shared:WaitForChild("Config")
+-- Use FindFirstChild to avoid hard errors during require and provide a safe require wrapper
+local ItemsModule = ConfigFolder:FindFirstChild("Items")
+
+local function safeRequireItems(module)
+    if module and module:IsA("ModuleScript") then
+        local ok, result = pcall(require, module)
+        if ok and result then
+            print("✅ Items module loaded from ReplicatedStorage/Shared/Config/Items")
+            return result
+        else
+            warn("⚠️ Failed to require Items module:", tostring(result))
+        end
+    else
+        warn("⚠️ Items module not found or not a ModuleScript.")
+    end
+
+    warn("⚠️ Using fallback Items stub; implement GetSpawnZones, GetItemById and GetRarityInfo in the real module.")
+    return {
+        GetSpawnZones = function()
+            return {}
+        end,
+        GetItemById = function(id)
+            return nil
+        end,
+        GetRarityInfo = function(rarity)
+            return nil
+        end,
+    }
+end
+
 local Config = {
-    Items = require(Shared.Config.Items),
+    Items = safeRequireItems(ItemsModule),
 }
 
 -- Managers
-local DataManager = require(ServerScriptService.Data.DataManager)
-local InventoryManager = require(ServerScriptService.Systems.InventorySystem.InventoryManager)
+local function safeRequireDataManager()
+    local tryPaths = {
+        {"Data", "DataManager"},
+        {"Systems", "Data", "DataManager"},
+        {"DataSystem", "DataManager"},
+    }
+
+    for _, parts in ipairs(tryPaths) do
+        local current = ServerScriptService
+        local okPath = true
+
+        for _, name in ipairs(parts) do
+            current = current and current:FindFirstChild(name)
+            if not current then
+                okPath = false
+                break
+            end
+        end
+
+        if okPath and current and current:IsA("ModuleScript") then
+            local ok, module = pcall(require, current)
+            if ok and module then
+                print("✅ DataManager loaded from ServerScriptService/" .. table.concat(parts, "/"))
+                return module
+            end
+        end
+    end
+
+    warn("⚠️ DataManager Module not found in expected locations; using stub implementation.")
+    return {
+        IncrementStat = function() return false end,
+        AddCurrency = function() return false end,
+    }
+end
+
+local DataManager = safeRequireDataManager()
+
+-- Safe require for InventoryManager with fallbacks and a stub to avoid runtime errors
+local function safeRequireInventoryManager()
+    local tryPaths = {
+        {"Systems", "InventorySystem", "InventoryManager"},
+        {"Systems", "Inventory", "InventoryManager"},
+        {"Systems", "InventorySystem", "InventoryManagerModule"},
+        {"Systems", "Inventory", "InventoryManagerModule"},
+        {"InventorySystem", "InventoryManager"},
+        {"Inventory", "InventoryManager"},
+    }
+
+    for _, parts in ipairs(tryPaths) do
+        local current = ServerScriptService
+        local okPath = true
+
+        for _, name in ipairs(parts) do
+            current = current and current:FindFirstChild(name)
+            if not current then
+                okPath = false
+                break
+            end
+        end
+
+        if okPath and current and current:IsA("ModuleScript") then
+            local ok, module = pcall(require, current)
+            if ok and module then
+                print("✅ InventoryManager loaded from ServerScriptService/" .. table.concat(parts, "/"))
+                return module
+            end
+        end
+    end
+
+    warn("⚠️ InventoryManager Module not found in expected locations; using stub implementation.")
+    -- Minimal stub to prevent runtime errors; adapt to required API if needed
+    return {
+        AddItem = function(player, itemId, itemName, count)
+            return false, "InventoryManager missing"
+        end,
+        RemoveItem = function() return false, "InventoryManager missing" end,
+        GetInventory = function() return {} end,
+    }
+end
+
+local InventoryManager = safeRequireInventoryManager()
 
 -- Constants
 local ITEM_TAG = "ItemSpawn"
