@@ -33,7 +33,8 @@ print("🌱 Garden Creatures - Server Starting...")
 -- ============================
 -- Initialize Items config ONCE on server startup
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local ItemsConfig = require(Shared.Config.Items)
+local ConfigFolder = Shared:WaitForChild("Config")
+local ItemsConfig = require(ConfigFolder:WaitForChild("Items"))
 
 -- This is the ONLY place Items.Initialize() should be called
 ItemsConfig.Initialize()
@@ -45,7 +46,8 @@ ItemsConfig.Initialize()
 -- Data Management (with error handling)
 local DataManager
 local dataManagerSuccess, dataManagerError = pcall(function()
-    DataManager = require(ServerScriptService.Data.DataManager)
+    local DataFolder = ServerScriptService:WaitForChild("Data")
+    DataManager = require(DataFolder:WaitForChild("DataManager"))
 end)
 
 if dataManagerSuccess and DataManager then
@@ -58,7 +60,7 @@ end
 -- Admin Commands (with error handling)
 local AdminCommands
 local adminSuccess, adminError = pcall(function()
-    AdminCommands = require(ServerScriptService.AdminCommands)
+    AdminCommands = require(ServerScriptService:WaitForChild("AdminCommands"))
 end)
 
 if adminSuccess and AdminCommands then
@@ -138,22 +140,47 @@ print("📦 Loading game systems...")
 -- Load game systems
 local systems = {}
 local systemModules = {
-    InventoryManager = ServerScriptService.Systems.InventorySystem.InventoryManager,
-    CreaturePlotManager = ServerScriptService.Systems.CreaturePlotSystem.CreaturePlotManager,
-    ItemSpawnController = ServerScriptService.Systems.ItemSpawnSystem.ItemSpawnController,
+    InventoryManager = {
+        path = {"Systems", "InventorySystem", "InventoryManager"},
+        parent = ServerScriptService
+    },
+    CreaturePlotManager = {
+        path = {"Systems", "CreaturePlotSystem", "CreaturePlotManager"},
+        parent = ServerScriptService
+    },
+    ItemSpawnController = {
+        path = {"Systems", "ItemSpawnSystem", "ItemSpawnController"},
+        parent = ServerScriptService
+    },
     -- Add more systems here as they're created
-    -- GardeningSystem = ServerScriptService.Systems.GardeningSystem.GardeningManager,
-    -- CraftingSystem = ServerScriptService.Systems.CraftingSystem.CraftingManager,
+    -- GardeningSystem = {
+    --     path = {"Systems", "GardeningSystem", "GardeningManager"},
+    --     parent = ServerScriptService
+    -- },
+    -- CraftingSystem = {
+    --     path = {"Systems", "CraftingSystem", "CraftingManager"},
+    --     parent = ServerScriptService
+    -- },
 }
 
 -- Load all systems with detailed error reporting
-for name, module in pairs(systemModules) do
-    local success, system = pcall(require, module)
+for name, config in pairs(systemModules) do
+    local success, result = pcall(function()
+        local current = config.parent
+        for _, childName in ipairs(config.path) do
+            current = current:WaitForChild(childName, 5)
+            if not current then
+                error("Failed to find child: " .. childName)
+            end
+        end
+        return require(current)
+    end)
+    
     if success then
-        systems[name] = system
+        systems[name] = result
         print("✅ Loaded system:", name)
     else
-        warn("❌ Failed to load system:", name, "Error:", system)
+        warn("❌ Failed to load system:", name, "Error:", result)
     end
 end
 
