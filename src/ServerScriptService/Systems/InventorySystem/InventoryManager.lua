@@ -67,7 +67,7 @@ end
 
 -- Initialize ProfileStore for inventory
 local InventoryStore = ProfileStoreModule.New(
-    PROFILE_STORE_NAME,
+    PlayerInventory_v1,
     GetDefaultInventoryData()
 )
 
