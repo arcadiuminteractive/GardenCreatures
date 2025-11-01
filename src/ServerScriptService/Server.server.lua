@@ -8,6 +8,11 @@
     3. Single initialization point
     4. Clear startup logging
     5. Proper error handling
+    
+    ✅ FIXED ISSUES:
+    1. Print statements appearing before modules are loaded (lines 42-43, 111)
+    2. Missing error handling for DataManager and AdminCommands loading
+    3. No verification that InventoryManager loaded successfully
 ]]
 
 -- ============================
@@ -37,14 +42,34 @@ ItemsConfig.Initialize()
 -- LOAD MANAGERS & SYSTEMS
 -- ============================
 
--- Data Management
-local DataManager = require(ServerScriptService.Data.DataManager)
-print("✅ DataManager loaded successfully!")
-print("✅ Inventory is managed separately by InventoryManager")
+-- Data Management (with error handling)
+local DataManager
+local dataManagerSuccess, dataManagerError = pcall(function()
+    DataManager = require(ServerScriptService.Data.DataManager)
+end)
 
--- Admin Commands
-local AdminCommands = require(ServerScriptService.AdminCommands)
-print("✅ Admin Commands loaded")
+if dataManagerSuccess and DataManager then
+    print("✅ DataManager loaded successfully!")
+else
+    warn("❌ Failed to load DataManager:", dataManagerError or "Unknown error")
+    error("CRITICAL: Cannot start server without DataManager")
+end
+
+-- Admin Commands (with error handling)
+local AdminCommands
+local adminSuccess, adminError = pcall(function()
+    AdminCommands = require(ServerScriptService.AdminCommands)
+end)
+
+if adminSuccess and AdminCommands then
+    print("✅ Admin Commands loaded")
+else
+    warn("❌ Failed to load AdminCommands:", adminError or "Unknown error")
+    -- Not critical, create stub
+    AdminCommands = {
+        OnPlayerJoined = function() end
+    }
+end
 
 -- ============================
 -- REMOTE EVENTS SETUP
@@ -108,7 +133,7 @@ print("✅ RemoteFunctions initialized (RequestInventory)")
 -- ============================
 -- LOAD GAME SYSTEMS
 -- ============================
-print("✅ DataManager loaded")
+print("📦 Loading game systems...")
 
 -- Load game systems
 local systems = {}
@@ -121,33 +146,44 @@ local systemModules = {
     -- CraftingSystem = ServerScriptService.Systems.CraftingSystem.CraftingManager,
 }
 
--- Load all systems
+-- Load all systems with detailed error reporting
 for name, module in pairs(systemModules) do
     local success, system = pcall(require, module)
     if success then
         systems[name] = system
         print("✅ Loaded system:", name)
     else
-        warn("❌ Failed to load system:", name, system)
+        warn("❌ Failed to load system:", name, "Error:", system)
     end
 end
 
+-- ✅ VERIFY CRITICAL SYSTEMS LOADED
+if not systems.InventoryManager then
+    warn("⚠️ InventoryManager failed to load - inventory functionality will not work!")
+end
+
 -- Initialize systems in dependency order
+print("🔧 Initializing systems...")
 for name, system in pairs(systems) do
     if system.Init then
         local success, err = pcall(system.Init)
-        if not success then
-            warn("❌ Failed to initialize system:", name, err)
+        if success then
+            print("✅ Initialized:", name)
+        else
+            warn("❌ Failed to initialize system:", name, "Error:", err)
         end
     end
 end
 
 -- Start systems
+print("▶️ Starting systems...")
 for name, system in pairs(systems) do
     if system.Start then
         local success, err = pcall(system.Start)
-        if not success then
-            warn("❌ Failed to start system:", name, err)
+        if success then
+            print("✅ Started:", name)
+        else
+            warn("❌ Failed to start system:", name, "Error:", err)
         end
     end
 end
@@ -157,26 +193,74 @@ end
 -- ============================
 
 Players.PlayerAdded:Connect(function(player)
-    print("👤 Player joined:", player.Name)
+    print("👤 Player joined:", player.Name, "(UserId:", player.UserId .. ")")
     
     -- Admin check
-    AdminCommands.OnPlayerJoined(player)
+    if AdminCommands and AdminCommands.OnPlayerJoined then
+        local success, err = pcall(AdminCommands.OnPlayerJoined, player)
+        if not success then
+            warn("❌ Admin check failed for", player.Name, ":", err)
+        end
+    end
     
     -- Wait for character
     local character = player.Character or player.CharacterAdded:Wait()
     local humanoid = character:WaitForChild("Humanoid")
     
     -- Load player data
-    DataManager.LoadPlayerData(player)
+    local dataSuccess, dataErr = pcall(DataManager.LoadPlayerData, player)
+    if not dataSuccess then
+        warn("❌ Failed to load player data for", player.Name, ":", dataErr)
+        player:Kick("Failed to load player data. Please rejoin.")
+        return
+    end
     
-    -- Setup inventory
-    if systems.InventoryManager and systems.InventoryManager.SetupPlayer then
-        systems.InventoryManager.SetupPlayer(player)
+    -- ✅ Setup inventory with proper error handling and logging
+    if systems.InventoryManager then
+        if systems.InventoryManager.SetupPlayer then
+            print("🎒 Setting up inventory for", player.Name)
+            local invSuccess, invErr = pcall(systems.InventoryManager.SetupPlayer, player)
+            if invSuccess then
+                print("✅ Inventory setup completed for", player.Name)
+                
+                -- ✅ WAIT FOR INVENTORY TO BE READY (if function exists)
+                if systems.InventoryManager.IsPlayerReady then
+                    local maxWait = 30  -- 30 second timeout
+                    local waited = 0
+                    local startTime = tick()
+                    
+                    while not systems.InventoryManager.IsPlayerReady(player) and waited < maxWait do
+                        task.wait(0.1)
+                        waited = waited + 0.1
+                    end
+                    
+                    if systems.InventoryManager.IsPlayerReady(player) then
+                        print("✅ Inventory confirmed ready for", player.Name, "in", string.format("%.2f", tick() - startTime), "seconds")
+                    else
+                        warn("⚠️ Inventory load timeout for", player.Name, "- may experience issues")
+                    end
+                else
+                    -- IsPlayerReady function doesn't exist yet
+                    print("⚠️ IsPlayerReady function not found - assuming inventory is ready")
+                end
+            else
+                warn("❌ Failed to setup inventory for", player.Name, ":", invErr)
+            end
+        else
+            warn("⚠️ InventoryManager.SetupPlayer function not found!")
+        end
+    else
+        warn("⚠️ InventoryManager system not loaded!")
     end
     
     -- Setup creature plots
     if systems.CreaturePlotManager then
-        systems.CreaturePlotManager.SetupPlayerPlots(player)
+        if systems.CreaturePlotManager.SetupPlayerPlots then
+            local plotSuccess, plotErr = pcall(systems.CreaturePlotManager.SetupPlayerPlots, player)
+            if not plotSuccess then
+                warn("❌ Failed to setup creature plots for", player.Name, ":", plotErr)
+            end
+        end
     end
     
     -- Welcome message
@@ -191,17 +275,26 @@ Players.PlayerRemoving:Connect(function(player)
     if systems.InventoryManager then
         local cleanup = systems.InventoryManager.CleanupPlayer or systems.InventoryManager.CleanupInventory
         if cleanup then
-            cleanup(player)
+            local success, err = pcall(cleanup, player)
+            if not success then
+                warn("❌ Failed to cleanup inventory for", player.Name, ":", err)
+            end
         end
     end
     
     -- Cleanup creature plots (with safety check)
     if systems.CreaturePlotManager and systems.CreaturePlotManager.CleanupPlayerPlots then
-        systems.CreaturePlotManager.CleanupPlayerPlots(player)
+        local success, err = pcall(systems.CreaturePlotManager.CleanupPlayerPlots, player)
+        if not success then
+            warn("❌ Failed to cleanup creature plots for", player.Name, ":", err)
+        end
     end
     
     -- Save and release player data
-    DataManager.UnloadPlayerData(player)
+    local success, err = pcall(DataManager.UnloadPlayerData, player)
+    if not success then
+        warn("❌ Failed to unload player data for", player.Name, ":", err)
+    end
 end)
 
 -- ============================
@@ -212,11 +305,17 @@ game:BindToClose(function()
     print("🛑 Server shutting down...")
     
     -- Save all data
-    DataManager.SaveAllData()
+    local success, err = pcall(DataManager.SaveAllData)
+    if not success then
+        warn("❌ Error saving all data during shutdown:", err)
+    end
     
     -- Cleanup all systems
     if systems.InventoryManager and systems.InventoryManager.SaveAllInventories then
-        systems.InventoryManager.SaveAllInventories()
+        local invSuccess, invErr = pcall(systems.InventoryManager.SaveAllInventories)
+        if not invSuccess then
+            warn("❌ Error saving inventories during shutdown:", invErr)
+        end
     end
     
     -- Wait for saves to complete
@@ -234,7 +333,23 @@ for _ in pairs(systems) do
     systemCount = systemCount + 1
 end
 
+print("\n" .. string.rep("=", 50))
 print("✅ Garden Creatures - Server Started Successfully!")
 print("🌱 Version: 0.1.0 Alpha")
 print("📊 Systems Loaded:", systemCount)
 print("🎮 Ready for players!")
+print(string.rep("=", 50) .. "\n")
+
+-- ============================
+-- DIAGNOSTIC INFO
+-- ============================
+if systems.InventoryManager then
+    print("✅ Inventory is managed separately by InventoryManager")
+    if systems.InventoryManager.IsPlayerReady then
+        print("✅ Inventory readiness checking available")
+    else
+        print("⚠️ Inventory readiness checking NOT available - consider implementing")
+    end
+else
+    warn("❌ InventoryManager not loaded - inventory features will not work!")
+end
