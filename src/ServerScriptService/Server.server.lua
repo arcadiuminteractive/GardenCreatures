@@ -255,10 +255,10 @@ for name, system in pairs(systems) do
 end
 
 -- ============================
--- PLAYER MANAGEMENT
+-- PLAYER MANAGEMENT  
 -- ============================
 
-Players.PlayerAdded:Connect(function(player)
+local function HandlePlayerJoin(player)
     print("👤 Player joined:", player.Name, "(UserId:", player.UserId .. ")")
     
     -- Admin check
@@ -281,58 +281,49 @@ Players.PlayerAdded:Connect(function(player)
         return
     end
     
-    -- ✅ Setup inventory with proper error handling and logging
-    if systems.InventoryManager then
-        if systems.InventoryManager.SetupPlayer then
-            print("🎒 Setting up inventory for", player.Name)
-            local invSuccess, invErr = pcall(systems.InventoryManager.SetupPlayer, player)
-            if invSuccess then
-                print("✅ Inventory setup completed for", player.Name)
-                
-                -- ✅ WAIT FOR INVENTORY TO BE READY (if function exists)
-                if systems.InventoryManager.IsPlayerReady then
-                    local maxWait = 30  -- 30 second timeout
-                    local waited = 0
-                    local startTime = tick()
-                    
-                    while not systems.InventoryManager.IsPlayerReady(player) and waited < maxWait do
-                        task.wait(0.1)
-                        waited = waited + 0.1
-                    end
-                    
-                    if systems.InventoryManager.IsPlayerReady(player) then
-                        print("✅ Inventory confirmed ready for", player.Name, "in", string.format("%.2f", tick() - startTime), "seconds")
-                    else
-                        warn("⚠️ Inventory load timeout for", player.Name, "- may experience issues")
-                    end
-                else
-                    -- IsPlayerReady function doesn't exist yet
-                    print("⚠️ IsPlayerReady function not found - assuming inventory is ready")
-                end
-            else
-                warn("❌ Failed to setup inventory for", player.Name, ":", invErr)
-            end
+    -- ✅ Setup inventory
+    if systems.InventoryManager and systems.InventoryManager.SetupPlayer then
+        print("🎒 Setting up inventory for", player.Name)
+        local invSuccess, invErr = pcall(systems.InventoryManager.SetupPlayer, player)
+        if invSuccess then
+            print("✅ Inventory setup completed for", player.Name)
         else
-            warn("⚠️ InventoryManager.SetupPlayer function not found!")
+            warn("❌ Failed to setup inventory for", player.Name, ":", invErr)
         end
     else
-        warn("⚠️ InventoryManager system not loaded!")
+        warn("⚠️ InventoryManager.SetupPlayer not available!")
     end
     
     -- Setup creature plots
-    if systems.CreaturePlotManager then
-        if systems.CreaturePlotManager.SetupPlayerPlots then
-            local plotSuccess, plotErr = pcall(systems.CreaturePlotManager.SetupPlayerPlots, player)
-            if not plotSuccess then
-                warn("❌ Failed to setup creature plots for", player.Name, ":", plotErr)
-            end
+    if systems.CreaturePlotManager and systems.CreaturePlotManager.SetupPlayerPlots then
+        local plotSuccess, plotErr = pcall(systems.CreaturePlotManager.SetupPlayerPlots, player)
+        if not plotSuccess then
+            warn("❌ Failed to setup creature plots for", player.Name, ":", plotErr)
         end
     end
     
     -- Welcome message
     task.wait(2)
     print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
+end
+
+-- Connect for future players
+Players.PlayerAdded:Connect(HandlePlayerJoin)
+
+-- ✅ Handle players already in game (important for Studio testing)
+for _, player in ipairs(Players:GetPlayers()) do
+    task.spawn(HandlePlayerJoin, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    print("👋 Player leaving:", player.Name)
+    
+    -- [rest of your PlayerRemoving code...]
 end)
+    
+    -- Welcome message
+    task.wait(2)
+    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
 
 Players.PlayerRemoving:Connect(function(player)
     print("👋 Player leaving:", player.Name)
