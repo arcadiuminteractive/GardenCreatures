@@ -96,22 +96,6 @@ else
     error("CRITICAL: Cannot start server without DataManager")
 end
 
--- Admin Commands (with error handling)
-local AdminCommands
-local adminSuccess, adminError = pcall(function()
-    AdminCommands = require(ServerScriptService:WaitForChild("AdminCommands"))
-end)
-
-if adminSuccess and AdminCommands then
-    print("✅ Admin Commands loaded")
-else
-    warn("❌ Failed to load AdminCommands:", adminError or "Unknown error")
-    -- Not critical, create stub
-    AdminCommands = {
-        OnPlayerJoined = function() end
-    }
-end
-
 -- ============================
 -- REMOTE EVENTS SETUP
 -- ============================
@@ -260,14 +244,6 @@ end
 
 local function HandlePlayerJoin(player)
     print("👤 Player joined:", player.Name, "(UserId:", player.UserId .. ")")
-    
-    -- Admin check
-    if AdminCommands and AdminCommands.OnPlayerJoined then
-        local success, err = pcall(AdminCommands.OnPlayerJoined, player)
-        if not success then
-            warn("❌ Admin check failed for", player.Name, ":", err)
-        end
-    end
     
     -- Wait for character
     local character = player.Character or player.CharacterAdded:Wait()
