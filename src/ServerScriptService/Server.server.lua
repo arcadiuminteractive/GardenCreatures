@@ -255,7 +255,7 @@ for name, system in pairs(systems) do
 end
 
 -- ============================
--- PLAYER MANAGEMENT  
+-- PLAYER MANAGEMENT
 -- ============================
 
 local function HandlePlayerJoin(player)
@@ -304,8 +304,57 @@ local function HandlePlayerJoin(player)
     
     -- Welcome message
     task.wait(2)
-    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
+    print("🌱 Welcome to Garden Creatures!")
 end
+
+-- Connect for future players
+Players.PlayerAdded:Connect(HandlePlayerJoin)
+
+-- ✅ Handle players already in game (important for Studio testing)
+for _, player in ipairs(Players:GetPlayers()) do
+    task.spawn(HandlePlayerJoin, player)
+end
+
+-- ✅ SEPARATE PlayerRemoving handler (NOT inside PlayerAdded!)
+Players.PlayerRemoving:Connect(function(player)
+    if not player then
+        warn("⚠️ PlayerRemoving called with nil player")
+        return
+    end
+    
+    print("👋 Player leaving:", player.Name)
+    
+    -- Cleanup inventory
+    if systems.InventoryManager then
+        local cleanup = systems.InventoryManager.CleanupPlayer or systems.InventoryManager.CleanupInventory
+        if cleanup then
+            local success, err = pcall(cleanup, player)
+            if not success then
+                warn("❌ Failed to cleanup inventory for", player.Name, ":", err)
+            end
+        end
+    end
+    
+    -- Cleanup creature plots
+    if systems.CreaturePlotManager and systems.CreaturePlotManager.CleanupPlayerPlots then
+        local success, err = pcall(systems.CreaturePlotManager.CleanupPlayerPlots, player)
+        if not success then
+            warn("❌ Failed to cleanup creature plots for", player.Name, ":", err)
+        else
+            print("✅ Cleaned up creature plots for", player.Name)
+        end
+    end
+    
+    -- Save and release player data
+    local success, err = pcall(DataManager.UnloadPlayerData, player)
+    if not success then
+        warn("❌ Failed to unload player data for", player.Name, ":", err)
+    end
+end)
+    
+    -- Welcome message
+    task.wait(2)
+    print("🌱 Welcome to Garden Creatures, " .. player.Name .. "!")
 
 -- Connect for future players
 Players.PlayerAdded:Connect(HandlePlayerJoin)

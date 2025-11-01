@@ -79,6 +79,38 @@ end
 -- ============================
 
 --[[
+    Reset player's new inventory system
+]]
+function AdminCommands.ResetInventory(adminPlayer: Player, targetUserId: number)
+    if not isAdmin(adminPlayer) then
+        warn("⛔ Unauthorized inventory reset attempt by:", adminPlayer.Name)
+        return false, "Not authorized"
+    end
+    
+    local targetPlayer = findPlayerByUserId(targetUserId)
+    if not targetPlayer then
+        notifyAdmin(adminPlayer, "Player not in game (UserId: " .. targetUserId .. ")", false)
+        return false, "Player not in game"
+    end
+    
+    -- Get InventoryManager from ServerScriptService
+    local ServerScriptService = game:GetService("ServerScriptService")
+    local InventoryManager = require(ServerScriptService.Systems.InventorySystem.InventoryManager)
+    
+    -- Clear the inventory
+    local success = InventoryManager.ClearInventory(targetPlayer)
+    
+    if success then
+        local message = "Reset inventory for " .. targetPlayer.Name
+        notifyAdmin(adminPlayer, message, true)
+        return true, message
+    else
+        notifyAdmin(adminPlayer, "Failed to reset inventory for " .. targetPlayer.Name, false)
+        return false, "Inventory not loaded"
+    end
+end
+
+--[[
     Reset all player data to defaults
 ]]
 function AdminCommands.ResetPlayer(adminPlayer: Player, targetUserId: number)
